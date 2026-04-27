@@ -144,6 +144,16 @@ impl ChromiumPage {
         self.page.close()
     }
 
+    /// 关闭当前标签页（更明确的命名）
+    pub fn close_tab(&self) -> Result<(), CdpError> {
+        self.page.close()
+    }
+
+    /// 关闭浏览器（仅对启动的新浏览器实例有效，会结束 Chrome 进程）
+    pub fn close_browser(&mut self) {
+        self.browser.close()
+    }
+
     /// 获取底层浏览器引用（与 DrissionPage `browser` 属性一致）
     pub fn browser(&self) -> &Browser {
         &self.browser

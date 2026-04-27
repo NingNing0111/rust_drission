@@ -10,16 +10,14 @@ fn main() -> Result<(), CdpError> {
     let config = BrowserConfig::new()
         .user_data_dir(user_data_dir)
         .headless(false);
-    let page = ChromiumPage::new(config)?;
+    let mut page = ChromiumPage::new(config)?;
 
     // 进入到牛人页
     page.get("https://www.zhipin.com/web/chat/recommend")?;
 
-    sleep_random_ms(800, 1000);
-
     let card_selector = "#recommend-list .card-item";
 
-    page.wait(card_selector, Duration::from_secs(3))?;
+    page.wait(card_selector, Duration::from_secs(30))?;
 
     // 滚动
     const RECOMMEND_FRAME_LOCATOR: &str = "css:iframe[name=recommendFrame]";
@@ -93,6 +91,8 @@ fn main() -> Result<(), CdpError> {
         sleep_random_ms(1200, 1500);
     }
 
+    // 关闭浏览器
+    page.close_browser();
     Ok(())
 }
 
