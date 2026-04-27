@@ -1,6 +1,6 @@
 {
-  "last_turn_at": "2026-04-27T06:32:08.158Z",
-  "turn_count": 1,
-  "last_progress_at": "2026-04-27T06:32:08.158Z",
-  "last_agent_output": "已完成文档编写与落盘，重点都围绕 `ChromiumPage` 的实际使用，而不是库内部实现。\n\n更新了 [README.md](E:/Work/AI-Job/Code/rust_drission/R"
+  "last_turn_at": "2026-04-27T06:41:23.171Z",
+  "turn_count": 2,
+  "last_progress_at": "2026-04-27T06:41:23.171Z",
+  "last_agent_output": "已发布到 crates.io：`rust_drission v0.1.5`。\n\n这次为发布做了一个必要调整：更新了 [Cargo.toml](E:/Work/AI-Job/Code/rust_dris"
 }

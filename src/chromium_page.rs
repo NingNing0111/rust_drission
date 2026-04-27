@@ -9,6 +9,7 @@
 use crate::browser::{Browser, BrowserConfig};
 use crate::cdp::CdpError;
 use crate::element::Element;
+use crate::frame::Frame;
 use crate::page::{Cookie, Page};
 use crate::stealth;
 use serde_json::Value;
@@ -156,5 +157,13 @@ impl ChromiumPage {
     /// 取出浏览器与当前标签页的所有权（会话缓存、跨模块持有等场景）
     pub fn into_parts(self) -> (Browser, Page) {
         (self.browser, self.page)
+    }
+
+    pub fn get_iframe(&self, locator: &str) -> Result<Option<Frame>, CdpError> {
+        self.page.get_frame(locator)
+    }
+
+    pub fn get_iframes(&self, locator: Option<&str>) -> Result<Vec<Frame>, CdpError> {
+        self.page.get_frames(locator)
     }
 }

@@ -23,14 +23,15 @@ pub mod chromium_page;
 pub mod dom;
 pub mod element;
 pub mod frame;
-pub mod locator;
 pub mod listener;
+pub mod locator;
 pub mod page;
 pub mod stealth;
+pub mod utils;
 
 pub use browser::{Browser, BrowserConfig, BrowserVersion};
-pub use chromium_page::ChromiumPage;
 pub use cdp::CdpError;
+pub use chromium_page::ChromiumPage;
 pub use element::Element;
 pub use frame::Frame;
 pub use listener::{DataPacket, Listener, Request, Response};
