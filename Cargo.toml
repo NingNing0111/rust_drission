@@ -1,0 +1,26 @@
+[package]
+name = "rust_drission"
+version = "0.1.5"
+edition = "2021"
+description = "Browser automation library for Rust via Chrome DevTools Protocol (CDP). Connect or launch Chrome, control pages/elements, run JS, cookies, screenshots, request/response listening. API inspired by DrissionPage."
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/ningning0111/rust_drission"
+homepage = "https://github.com/ningning0111/rust_drission"
+keywords = ["browser", "automation", "cdp", "chrome",  "webdriver"]
+categories = ["web-programming", "development-tools"]
+
+[dependencies]
+ureq = "2"
+tungstenite = "0.21"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+url = "2"
+base64 = "0.21"
+
+[dev-dependencies]
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
