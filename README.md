@@ -15,7 +15,7 @@
 
 ```toml
 [dependencies]
-rust_drission = "0.1.5"
+rust_drission = "0.1.6"
 ```
 
 ## Quick Start
