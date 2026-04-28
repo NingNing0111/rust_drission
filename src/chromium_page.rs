@@ -139,6 +139,10 @@ impl ChromiumPage {
         Ok(tab)
     }
 
+    pub fn tabs(&self) -> Result<Vec<Page>, CdpError> {
+        self.browser.tabs()
+    }
+
     /// 关闭当前标签页（与 DrissionPage `close()` 一致）
     pub fn close(&self) -> Result<(), CdpError> {
         self.page.close()
