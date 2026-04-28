@@ -1,6 +1,6 @@
 [package]
 name = "rust_drission"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 description = "Browser automation library for Rust via Chrome DevTools Protocol (CDP). Connect or launch Chrome, control pages/elements, run JS, cookies, screenshots, request/response listening. API inspired by DrissionPage."
 readme = "README.md"
@@ -41,3 +41,7 @@ winreg = "0.52"
 name = "boss_say_hello"
 path = "examples/boss_say_hello.rs"
 
+
+[[example]]
+name = "network_listen"
+path = "examples/network_listen.rs"

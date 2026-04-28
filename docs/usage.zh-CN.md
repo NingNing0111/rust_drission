@@ -21,7 +21,7 @@
 
 ```toml
 [dependencies]
-rust_drission = "0.1.5"
+rust_drission = "0.1.8"
 ```
 
 ## 3. 最小示例
@@ -348,26 +348,85 @@ println!("latest title = {}", latest.title()?);
 
 ## 11. 监听网络请求
 
-网络监听能力挂在 `Page` 上，所以通常这样用：
+`ChromiumPage` 提供了四个网络监听方法。**务必先启动监听再导航**，避免漏掉网络事件。
+
+### 11.1 基础监听
 
 ```rust
 use std::time::Duration;
 
-let listener = page.tab().listen()?;
+let listener = page.listen()?;
 page.get("https://example.com")?;
 
-if let Some(packet) = listener.wait(Duration::from_secs(10))? {
-    println!("request url = {}", packet.request.url);
-    println!("method = {}", packet.request.method);
-    println!("response url = {}", packet.response.url);
-    println!("status = {:?}", packet.response.status);
+while let Some(packet) = listener.wait(Duration::from_secs(5))? {
+    println!("{} {} → {} ({})",
+        packet.request.method,
+        packet.request.url,
+        packet.response.status.unwrap_or(0),
+        packet.resource_type.as_deref().unwrap_or("-")
+    );
+    if let Some(body) = &packet.body {
+        println!("  body: {} bytes", body.len());
+    }
 }
 ```
 
+### 11.2 按 URL 关键词过滤
+
+```rust
+let url_listener = page.listen_url("api/data")?;
+page.get("https://example.com")?;
+
+if let Some(pkt) = url_listener.wait(Duration::from_secs(10))? {
+    println!("API 请求: {} → {}", pkt.request.url, pkt.response.status.unwrap_or(0));
+    if let Some(body) = &pkt.body {
+        let text = String::from_utf8_lossy(body);
+        println!("响应内容: {}", text);
+    }
+}
+```
+
+### 11.3 按资源类型过滤
+
+CDP 资源类型包括：`Document`、`XHR`、`Fetch`、`Script`、`Stylesheet`、`Image`、`Other` 等。
+
+```rust
+let fetch_listener = page.listen_resource_type("Fetch")?;
+page.run_js_await("fetch('https://httpbin.org/get').then(r => r.json())")?;
+
+if let Some(pkt) = fetch_listener.wait(Duration::from_secs(10))? {
+    println!("Fetch: {} → {}", pkt.request.url, pkt.response.status.unwrap_or(0));
+}
+```
+
+### 11.4 批量收集
+
+```rust
+let listener = page.listen()?;
+page.get("https://example.com")?;
+
+let packets = page.listen_collect(&listener, Duration::from_secs(5), |pkt| {
+    println!("  收集: {} {}", pkt.request.method, pkt.request.url);
+    true  // 返回 false 可提前停止
+})?;
+
+println!("共收集 {} 个数据包", packets.len());
+```
+
+### 11.5 Listener 方法一览
+
+- `listener.wait(timeout)` — 阻塞等待下一个匹配的数据包，超时返回 `None`
+- `listener.wait_one()` — 无限等待直到收到匹配的数据包
+- `listener.try_recv()` — 非阻塞，立即返回
+- `listener.collect(timeout, callback)` — 批量收集，回调控制停止
+- `listener.filter_url(pattern)` — 在已有监听器上链式添加 URL 过滤
+- `listener.filter_resource_type(rt)` — 在已有监听器上链式添加资源类型过滤
+
 注意：
 
-- `listen()` 需要 `Page` 带有浏览器调试端点信息
-- 用 `ChromiumPage::new()`、`ChromiumPage::connect()`、`Browser::new_tab()` 等正常拿到的页面，一般可以直接监听
+- `listen()` 会阻塞直到后台线程就绪（连接完成 + Network.enable 成功）
+- 每个监听器使用独立的 CDP 连接，不会影响页面的正常操作
+- 如果你有 `Page` 引用，也可以直接调用 `page.tab().listen()`
 
 ## 12. iframe 使用
 
@@ -421,13 +480,13 @@ page.screenshot("loaded.png")?;
 ```rust
 use std::time::Duration;
 
-let listener = page.tab().listen()?;
+let url_listener = page.listen_url("/api/")?;
 page.get("https://example.com")?;
 
-while let Some(packet) = listener.wait(Duration::from_secs(3))? {
-    if packet.request.url.contains("/api/") {
-        println!("api status = {:?}", packet.response.status);
-        break;
+if let Some(packet) = url_listener.wait(Duration::from_secs(10))? {
+    println!("api status = {:?}", packet.response.status);
+    if let Some(body) = &packet.body {
+        println!("api body = {}", String::from_utf8_lossy(body));
     }
 }
 ```
@@ -453,7 +512,6 @@ while let Some(packet) = listener.wait(Duration::from_secs(3))? {
 
 - `wait_visible`
 - `wait_hidden`
-- `listen`
 - `run_cdp`
 - `local_storage`
 - `session_storage`

@@ -10,12 +10,13 @@
 - DrissionPage-style locator strings such as `css:`, `xpath:`, `text:`, `id:`, `class:`, `tag:`
 - Supports direct JS/CDP calls when the high-level API is not enough
 - Keeps advanced capabilities available through `page.tab()` and `page.browser()`
+- Built-in network traffic listening with URL/resource-type filtering and batch collection
 
 ## Installation
 
 ```toml
 [dependencies]
-rust_drission = "0.1.6"
+rust_drission = "0.1.8"
 ```
 
 ## Quick Start
@@ -86,6 +87,37 @@ if let Some(button) = page.ele("id:submit")? {
 }
 ```
 
+### Listen to network traffic
+
+```rust
+use std::time::Duration;
+
+// Start listener first (blocks until ready), then navigate
+let listener = page.listen()?;
+page.get("https://example.com")?;
+
+// Receive all packets
+while let Some(pkt) = listener.wait(Duration::from_secs(5))? {
+    println!("{} {} → {}", pkt.request.method, pkt.request.url, pkt.response.status.unwrap_or(0));
+}
+
+// Or filter by URL keyword
+let url_listener = page.listen_url("api")?;
+page.get("https://example.com")?;
+if let Some(pkt) = url_listener.wait(Duration::from_secs(10))? {
+    println!("API response: {:?}", pkt.body);
+}
+
+// Or filter by resource type (XHR, Fetch, Document, Script, etc.)
+let fetch_listener = page.listen_resource_type("Fetch")?;
+
+// Or batch collect after navigation
+let listener = page.listen()?;
+page.get("https://example.com")?;
+let packets = page.listen_collect(&listener, Duration::from_secs(5), |pkt| true)?;
+println!("collected {} packets", packets.len());
+```
+
 ### Run JavaScript
 
 ```rust
@@ -113,5 +145,7 @@ tab.set_local_storage("token", "demo-value")?;
 
 - `ChromiumPage` is the recommended starting point. Use `page.tab()` or `page.browser()` only when you need lower-level control.
 - `Frame` support is aimed at same-origin iframes.
-- `listen()` is available on `Page`, so with `ChromiumPage` you usually call `page.tab().listen()?`.
+- `listen()` is available directly on `ChromiumPage`, as well as `listen_url()`, `listen_resource_type()`, and `listen_collect()`.
+- Always start the listener **before** navigating, so no network events are missed: `let l = page.listen()?; page.get("...")?;`.
+- Element lookup methods often return `Result<Option<Element>, CdpError>`. Handle the `None` case explicitly.
 - Element lookup methods often return `Result<Option<Element>, CdpError>`. Handle the `None` case explicitly.

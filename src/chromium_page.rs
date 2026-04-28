@@ -10,6 +10,7 @@ use crate::browser::{Browser, BrowserConfig};
 use crate::cdp::CdpError;
 use crate::element::Element;
 use crate::frame::Frame;
+use crate::listener::{DataPacket, Listener};
 use crate::page::{Cookie, Page};
 use crate::stealth;
 use serde_json::Value;
@@ -179,5 +180,121 @@ impl ChromiumPage {
 
     pub fn get_iframes(&self, locator: Option<&str>) -> Result<Vec<Frame>, CdpError> {
         self.page.get_frames(locator)
+    }
+
+    // ==================== 网络数据包监听 ====================
+
+    /// 启动网络数据包监听器，返回 [Listener] 用于接收请求/响应数据。
+    ///
+    /// 监听器通过独立的 CDP 连接接收 Network 事件，不影响页面的正常操作。
+    ///
+    /// # 基本用法
+    ///
+    /// ```no_run
+    /// use rust_drission::ChromiumPage;
+    /// use rust_drission::BrowserConfig;
+    /// use std::time::Duration;
+    ///
+    /// let page = ChromiumPage::new(BrowserConfig::new()).unwrap();
+    /// let mut listener = page.listen().unwrap();
+    ///
+    /// page.get("https://www.example.com").unwrap();
+    ///
+    /// // 阻塞等待下一个数据包（带超时）
+    /// while let Some(packet) = listener.wait(Duration::from_secs(5)).unwrap() {
+    ///     println!("{} {} -> {} {}",
+    ///         packet.request.method,
+    ///         packet.request.url,
+    ///         packet.response.status.unwrap_or(0),
+    ///         packet.resource_type.as_deref().unwrap_or("-")
+    ///     );
+    /// }
+    /// ```
+    pub fn listen(&self) -> Result<Listener, CdpError> {
+        self.page.listen()
+    }
+
+    /// 启动监听并按条件过滤：只保留 URL 包含 `url_contains` 的数据包。
+    ///
+    /// ```no_run
+    /// use rust_drission::ChromiumPage;
+    /// use rust_drission::BrowserConfig;
+    /// use std::time::Duration;
+    ///
+    /// let page = ChromiumPage::new(BrowserConfig::new()).unwrap();
+    /// let mut listener = page.listen_url("api/data").unwrap();
+    ///
+    /// page.get("https://example.com").unwrap();
+    ///
+    /// if let Some(packet) = listener.wait(Duration::from_secs(10)).unwrap() {
+    ///     println!("捕获到 API 请求: {}", packet.request.url);
+    ///     if let Some(body) = &packet.body {
+    ///         println!("响应体: {} bytes", body.len());
+    ///     }
+    /// }
+    /// ```
+    pub fn listen_url(&self, url_contains: &str) -> Result<Listener, CdpError> {
+        let listener = self.page.listen()?;
+        Ok(Listener::filter_url(listener, url_contains.to_string()))
+    }
+
+    /// 启动监听并按资源类型过滤（如 "XHR", "Fetch", "Document", "Script" 等）。
+    ///
+    /// ```no_run
+    /// use rust_drission::ChromiumPage;
+    /// use rust_drission::BrowserConfig;
+    /// use std::time::Duration;
+    ///
+    /// let page = ChromiumPage::new(BrowserConfig::new()).unwrap();
+    /// let mut listener = page.listen_resource_type("XHR").unwrap();
+    ///
+    /// page.get("https://example.com").unwrap();
+    ///
+    /// while let Some(packet) = listener.wait(Duration::from_secs(5)).unwrap() {
+    ///     println!("XHR: {} {}", packet.request.method, packet.request.url);
+    /// }
+    /// ```
+    pub fn listen_resource_type(&self, resource_type: &str) -> Result<Listener, CdpError> {
+        let listener = self.page.listen()?;
+        Ok(Listener::filter_resource_type(listener, resource_type.to_string()))
+    }
+
+    /// 从已有监听器持续收集数据包到 `Vec`，直到超时或闭包返回 `false`。
+    ///
+    /// 使用前需先调用 `page.listen()` 启动监听器，然后导航页面，最后收集。
+    ///
+    /// ```no_run
+    /// use rust_drission::ChromiumPage;
+    /// use rust_drission::BrowserConfig;
+    /// use std::time::Duration;
+    ///
+    /// let page = ChromiumPage::new(BrowserConfig::new()).unwrap();
+    ///
+    /// // 先启动监听（阻塞直到就绪）
+    /// let listener = page.listen().unwrap();
+    /// // 再导航
+    /// page.get("https://example.com").unwrap();
+    /// // 最后收集数据包
+    /// let packets = page.listen_collect(
+    ///     &listener,
+    ///     Duration::from_secs(5),
+    ///     |packet| {
+    ///         println!("{} {}", packet.request.method, packet.request.url);
+    ///         true  // 返回 true 继续，false 停止
+    ///     },
+    /// ).unwrap();
+    ///
+    /// println!("共收集 {} 个数据包", packets.len());
+    /// ```
+    pub fn listen_collect<F>(
+        &self,
+        listener: &Listener,
+        timeout: Duration,
+        on_packet: F,
+    ) -> Result<Vec<DataPacket>, CdpError>
+    where
+        F: FnMut(&DataPacket) -> bool,
+    {
+        listener.collect(timeout, on_packet)
     }
 }

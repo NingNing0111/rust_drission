@@ -21,7 +21,7 @@ If your goal is “use DrissionPage-like browser automation from Rust”, `Chrom
 
 ```toml
 [dependencies]
-rust_drission = "0.1.5"
+rust_drission = "0.1.8"
 ```
 
 ## 3. Minimal example
@@ -348,26 +348,85 @@ Available browser-level tab APIs include:
 
 ## 11. Listen to network traffic
 
-The listener is exposed on `Page`, so with `ChromiumPage` you usually write:
+`ChromiumPage` provides four network listening methods. Always start the listener **before** navigating to avoid missing events.
+
+### 11.1 Basic listening
 
 ```rust
 use std::time::Duration;
 
-let listener = page.tab().listen()?;
+let listener = page.listen()?;
 page.get("https://example.com")?;
 
-if let Some(packet) = listener.wait(Duration::from_secs(10))? {
-    println!("request url = {}", packet.request.url);
-    println!("method = {}", packet.request.method);
-    println!("response url = {}", packet.response.url);
-    println!("status = {:?}", packet.response.status);
+while let Some(packet) = listener.wait(Duration::from_secs(5))? {
+    println!("{} {} → {} ({})",
+        packet.request.method,
+        packet.request.url,
+        packet.response.status.unwrap_or(0),
+        packet.resource_type.as_deref().unwrap_or("-")
+    );
+    if let Some(body) = &packet.body {
+        println!("  body: {} bytes", body.len());
+    }
 }
 ```
 
+### 11.2 Filter by URL keyword
+
+```rust
+let url_listener = page.listen_url("api/data")?;
+page.get("https://example.com")?;
+
+if let Some(pkt) = url_listener.wait(Duration::from_secs(10))? {
+    println!("API request: {} → {}", pkt.request.url, pkt.response.status.unwrap_or(0));
+    if let Some(body) = &pkt.body {
+        let text = String::from_utf8_lossy(body);
+        println!("Response: {}", text);
+    }
+}
+```
+
+### 11.3 Filter by resource type
+
+CDP resource types include: `Document`, `XHR`, `Fetch`, `Script`, `Stylesheet`, `Image`, `Other`, etc.
+
+```rust
+let fetch_listener = page.listen_resource_type("Fetch")?;
+page.run_js_await("fetch('https://httpbin.org/get').then(r => r.json())")?;
+
+if let Some(pkt) = fetch_listener.wait(Duration::from_secs(10))? {
+    println!("Fetch: {} → {}", pkt.request.url, pkt.response.status.unwrap_or(0));
+}
+```
+
+### 11.4 Batch collect
+
+```rust
+let listener = page.listen()?;
+page.get("https://example.com")?;
+
+let packets = page.listen_collect(&listener, Duration::from_secs(5), |pkt| {
+    println!("  collecting: {} {}", pkt.request.method, pkt.request.url);
+    true  // return false to stop early
+})?;
+
+println!("collected {} packets", packets.len());
+```
+
+### 11.5 Listener methods
+
+- `listener.wait(timeout)` — block until a matching packet arrives or timeout
+- `listener.wait_one()` — block indefinitely until a matching packet arrives
+- `listener.try_recv()` — non-blocking, returns immediately
+- `listener.collect(timeout, callback)` — batch collect with callback control
+- `listener.filter_url(pattern)` — chain a URL filter onto an existing listener
+- `listener.filter_resource_type(rt)` — chain a resource type filter
+
 Notes:
 
-- `listen()` requires a `Page` that knows the browser debugging endpoint
-- pages created through the normal library workflow usually satisfy that automatically
+- `listen()` blocks until the background thread is ready (connected + Network.enable)
+- Each listener uses an independent CDP connection, so it does not interfere with page operations
+- `page.tab().listen()` also works if you have a `Page` reference directly
 
 ## 12. Work with iframes
 
@@ -421,13 +480,13 @@ page.screenshot("loaded.png")?;
 ```rust
 use std::time::Duration;
 
-let listener = page.tab().listen()?;
+let url_listener = page.listen_url("/api/")?;
 page.get("https://example.com")?;
 
-while let Some(packet) = listener.wait(Duration::from_secs(3))? {
-    if packet.request.url.contains("/api/") {
-        println!("api status = {:?}", packet.response.status);
-        break;
+if let Some(packet) = url_listener.wait(Duration::from_secs(10))? {
+    println!("api status = {:?}", packet.response.status);
+    if let Some(body) = &packet.body {
+        println!("api body = {}", String::from_utf8_lossy(body));
     }
 }
 ```
@@ -453,7 +512,6 @@ Use it when you need features such as:
 
 - `wait_visible`
 - `wait_hidden`
-- `listen`
 - `run_cdp`
 - `local_storage`
 - `session_storage`

@@ -12,10 +12,21 @@ use std::time::Duration;
 use tungstenite::client::connect_with_config;
 use tungstenite::Message;
 
+/// 过滤条件（内部使用）
+enum PacketFilter {
+    /// 不过滤，接收所有数据包
+    None,
+    /// 只保留 URL 包含指定字符串的数据包
+    UrlContains(String),
+    /// 只保留指定资源类型的数据包
+    ResourceType(String),
+}
+
 /// 监听器：用于监听当前 Tab 的请求与响应，通过独立 CDP 连接接收 Network 事件
 pub struct Listener {
     rx: Receiver<Result<DataPacket, CdpError>>,
     _join: Option<thread::JoinHandle<()>>,
+    filter: PacketFilter,
 }
 
 /// 一次请求+响应的数据包（含可选的响应体）
@@ -72,54 +83,146 @@ struct InProgressPacket {
 }
 
 impl Listener {
-    /// 创建并启动监听（需要 Page 的 browser_endpoint 与 target_id，通常通过 `page.listen()` 获取）
+    /// 创建并启动监听（需要 Page 的 browser_endpoint 与 target_id，通常通过 `page.listen()` 获取）。
+    /// 阻塞直到后台线程完成 WebSocket 连接、附着 Tab 并启用 Network 域，确保不丢失事件。
     pub fn start(
         browser_endpoint: &str,
         target_id: &str,
     ) -> Result<Self, CdpError> {
         let ws_url = crate::browser::fetch_ws_url_from_endpoint(browser_endpoint)?;
         let (tx, rx) = std::sync::mpsc::channel();
+        let (ready_tx, ready_rx) = std::sync::mpsc::channel();
 
         let target_id = target_id.to_string();
         let join = thread::spawn(move || {
-            if let Err(e) = run_listener_loop(&ws_url, &target_id, &tx) {
+            if let Err(e) = run_listener_loop(&ws_url, &target_id, &tx, &ready_tx) {
                 let _ = tx.send(Err(e));
             }
         });
 
+        // 等待后台线程完成初始化（连接 + attach + Network.enable）
+        ready_rx
+            .recv()
+            .map_err(|_| CdpError::Connect("监听线程启动失败".into()))?;
+
         Ok(Self {
             rx,
             _join: Some(join),
+            filter: PacketFilter::None,
         })
     }
 
-    /// 阻塞直到收到一条数据包，或超时；超时返回 `Ok(None)`，错误返回 `Err`
+    /// 阻塞直到收到一条符合过滤条件的数据包，或超时；超时返回 `Ok(None)`，错误返回 `Err`
     pub fn wait(&self, timeout: Duration) -> Result<Option<DataPacket>, CdpError> {
-        match self.rx.recv_timeout(timeout) {
-            Ok(Ok(packet)) => Ok(Some(packet)),
-            Ok(Err(e)) => Err(e),
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Ok(None),
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Ok(None),
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            if remaining.is_zero() {
+                return Ok(None);
+            }
+            match self.rx.recv_timeout(remaining) {
+                Ok(Ok(packet)) => {
+                    if self.matches_filter(&packet) {
+                        return Ok(Some(packet));
+                    }
+                    // 不匹配过滤条件，继续等待
+                    continue;
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => return Ok(None),
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return Ok(None),
+            }
         }
     }
 
-    /// 阻塞直到收到一条数据包；无超时，连接断开则返回 `None`
+    /// 阻塞直到收到一条符合过滤条件的数据包；无超时，连接断开则返回 `None`
     pub fn wait_one(&self) -> Result<Option<DataPacket>, CdpError> {
-        match self.rx.recv() {
-            Ok(Ok(packet)) => Ok(Some(packet)),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Ok(None),
+        loop {
+            match self.rx.recv() {
+                Ok(Ok(packet)) => {
+                    if self.matches_filter(&packet) {
+                        return Ok(Some(packet));
+                    }
+                    continue;
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(_) => return Ok(None),
+            }
         }
     }
 
-    /// 非阻塞：尝试取一条已就绪的数据包
+    /// 非阻塞：尝试取一条已就绪且符合过滤条件的数据包
     pub fn try_recv(&self) -> Result<Option<DataPacket>, CdpError> {
-        match self.rx.try_recv() {
-            Ok(Ok(packet)) => Ok(Some(packet)),
-            Ok(Err(e)) => Err(e),
-            Err(std::sync::mpsc::TryRecvError::Empty) => Ok(None),
-            Err(std::sync::mpsc::TryRecvError::Disconnected) => Ok(None),
+        // 非阻塞模式下需要排空所有已就绪消息来找匹配的
+        loop {
+            match self.rx.try_recv() {
+                Ok(Ok(packet)) => {
+                    if self.matches_filter(&packet) {
+                        return Ok(Some(packet));
+                    }
+                    continue;
+                }
+                Ok(Err(e)) => return Err(e),
+                Err(std::sync::mpsc::TryRecvError::Empty) => return Ok(None),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => return Ok(None),
+            }
         }
+    }
+
+    /// 创建 URL 过滤监听器：只保留 URL 包含指定字符串的数据包
+    pub fn filter_url(mut self, url_contains: String) -> Self {
+        self.filter = PacketFilter::UrlContains(url_contains);
+        self
+    }
+
+    /// 创建资源类型过滤监听器：只保留指定资源类型的数据包
+    pub fn filter_resource_type(mut self, resource_type: String) -> Self {
+        self.filter = PacketFilter::ResourceType(resource_type);
+        self
+    }
+
+    /// 检查数据包是否匹配当前过滤条件
+    fn matches_filter(&self, packet: &DataPacket) -> bool {
+        match &self.filter {
+            PacketFilter::None => true,
+            PacketFilter::UrlContains(pattern) => {
+                packet.request.url.contains(pattern)
+                    || packet.response.url.contains(pattern)
+            }
+            PacketFilter::ResourceType(rt) => packet
+                .resource_type
+                .as_deref()
+                .map(|t| t.eq_ignore_ascii_case(rt))
+                .unwrap_or(false),
+        }
+    }
+
+    /// 持续收集数据包，每收到一个调用 `on_packet` 回调。
+    /// 回调返回 `false` 停止收集；`timeout` 为单次等待超时。
+    /// 返回所有已收集的数据包。
+    pub fn collect<F>(
+        &self,
+        timeout: Duration,
+        mut on_packet: F,
+    ) -> Result<Vec<DataPacket>, CdpError>
+    where
+        F: FnMut(&DataPacket) -> bool,
+    {
+        let mut collected = Vec::new();
+        loop {
+            match self.wait(timeout) {
+                Ok(Some(packet)) => {
+                    let should_continue = on_packet(&packet);
+                    collected.push(packet);
+                    if !should_continue {
+                        break;
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(collected)
     }
 }
 
@@ -127,6 +230,7 @@ fn run_listener_loop(
     ws_url: &str,
     target_id: &str,
     tx: &Sender<Result<DataPacket, CdpError>>,
+    ready_tx: &Sender<()>,
 ) -> Result<(), CdpError> {
     let url = ws_url
         .parse::<url::Url>()
@@ -175,11 +279,14 @@ fn run_listener_loop(
         .map_err(|e| CdpError::Send(e.to_string()))?;
     read_until_id(&mut stream, enable_id)?;
 
+    // 通知主线程：监听已就绪
+    let _ = ready_tx.send(());
+
     let session_id = Arc::new(session_id);
     let next_id = Arc::new(AtomicI64::new(3));
     let request_ids: Arc<Mutex<HashMap<String, InProgressPacket>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    let pending_body: Arc<Mutex<HashMap<i64, (String, Request, Response)>>> =
+    let pending_body: Arc<Mutex<HashMap<i64, (String, Request, Response, Option<String>)>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
     loop {
@@ -196,7 +303,7 @@ fn run_listener_loop(
             // 命令响应（如 getResponseBody）
             if let Some(result) = parsed.result {
                 let mut pending = pending_body.lock().map_err(|e| CdpError::Recv(e.to_string()))?;
-                if let Some((_req_id, req, mut resp)) = pending.remove(&id) {
+                if let Some((_req_id, req, mut resp, resource_type)) = pending.remove(&id) {
                     let body_str = result.get("body").and_then(Value::as_str);
                     let body_b64 = result
                         .get("base64Encoded")
@@ -216,7 +323,7 @@ fn run_listener_loop(
                         response: resp,
                         body,
                         is_failed: false,
-                        resource_type: None,
+                        resource_type,
                     };
                     drop(pending);
                     let _ = tx.send(Ok(packet));
@@ -306,6 +413,7 @@ fn run_listener_loop(
                     drop(ids);
 
                     let req = in_progress.request;
+                    let resource_type = in_progress.resource_type;
                     let resp = Response {
                         url: in_progress.response_url,
                         status: in_progress.response_status,
@@ -329,7 +437,7 @@ fn run_listener_loop(
                     pending_body
                         .lock()
                         .map_err(|e| CdpError::Recv(e.to_string()))?
-                        .insert(id, (request_id, req, resp));
+                        .insert(id, (request_id, req, resp, resource_type));
                 }
                 "Network.loadingFailed" => {
                     let request_id = params

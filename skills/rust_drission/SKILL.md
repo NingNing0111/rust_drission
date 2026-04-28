@@ -28,10 +28,10 @@ Use this skill when the task is about operating `rust_drission` as a user of the
    - Element lookup: `ele`, `eles`
    - Direct actions: `click`, `input`, `screenshot`
    - JS: `run_js`, `run_js_await`
+   - Network: `listen`, `listen_url`, `listen_resource_type`, `listen_collect`
 
 3. Drop to `page.tab()` only for lower-level page features
    - `wait_visible`, `wait_hidden`
-   - `listen`
    - `run_cdp`
    - `get_frame`, `get_frames`
    - storage and cache APIs
@@ -106,19 +106,38 @@ page.tab().wait_visible("css:.loaded", Duration::from_secs(10))?;
 ```rust
 use std::time::Duration;
 
-let listener = page.tab().listen()?;
+// Basic: listen to all network packets
+let listener = page.listen()?;
 page.get("https://example.com")?;
 
 if let Some(packet) = listener.wait(Duration::from_secs(10))? {
     println!("{}", packet.request.url);
 }
+
+// Filter by URL keyword
+let url_listener = page.listen_url("api")?;
+page.get("https://example.com")?;
+if let Some(pkt) = url_listener.wait(Duration::from_secs(5))? {
+    println!("API: {} → {}", pkt.request.url, pkt.response.status.unwrap_or(0));
+}
+
+// Filter by resource type
+let fetch_listener = page.listen_resource_type("Fetch")?;
+
+// Batch collect after navigation
+let listener = page.listen()?;
+page.get("https://example.com")?;
+let packets = page.listen_collect(&listener, Duration::from_secs(5), |pkt| true)?;
+println!("collected {} packets", packets.len());
 ```
+
+Important: always call `listen()` **before** `page.get()` to avoid missing events.
 
 ## Constraints To Mention When Relevant
 
 - The library targets Chrome / Chromium through CDP
 - `Frame` usage is mainly for same-origin iframes
-- `listen()` is a `Page` method, so from `ChromiumPage` you usually call `page.tab().listen()?`
+- `listen()`, `listen_url()`, `listen_resource_type()`, and `listen_collect()` are directly on `ChromiumPage`
 - Some advanced behaviors require dropping to `Page` or `Browser`
 - `run_js` / `run_js_await` return `serde_json::Value`
 
