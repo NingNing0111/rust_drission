@@ -79,6 +79,11 @@ impl Frame {
 
     /// 在本 frame 内按定位器查单个元素（与 DrissionPage 在 ChromiumFrame 上 ele() 一致）
     pub fn ele(&self, locator: &str) -> Result<Option<Element>, CdpError> {
+        self._ele_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    /// ele 内部实现
+    fn _ele_inner(&self, locator: &str) -> Result<Option<Element>, CdpError> {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -139,6 +144,11 @@ impl Frame {
 
     /// 在本 frame 内按定位器查多个元素（与 DrissionPage 在 ChromiumFrame 上 eles() 一致）
     pub fn eles(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
+        self._eles_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    /// eles 内部实现
+    fn _eles_inner(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,

@@ -23,6 +23,20 @@ pub enum CdpError {
     Json(#[from] serde_json::Error),
 }
 
+impl CdpError {
+    /// 为错误追加上下文信息（如定位器表达式），方便排查
+    pub fn with_context(self, ctx: &str) -> Self {
+        match self {
+            CdpError::Protocol { id, code, message } => CdpError::Protocol {
+                id,
+                code,
+                message: format!("{} (表达式: {})", message, ctx),
+            },
+            other => other,
+        }
+    }
+}
+
 /// CDP 命令请求（发送格式，字段名须为 CDP 规定的 id/method/sessionId/params）
 #[derive(Debug, Serialize)]
 struct CdpCommand {

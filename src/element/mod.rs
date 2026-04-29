@@ -469,6 +469,10 @@ impl Element {
 
     /// 在当前元素下按 CSS 选择器取**第一个匹配子元素的文本**（不创建子元素引用，避免 DOM 更新后 nodeId 失效导致 "Could not find node with given id"）
     pub fn element_text(&self, locator: &str) -> Result<Option<String>, CdpError> {
+        self._element_text_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    fn _element_text_inner(&self, locator: &str) -> Result<Option<String>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -490,6 +494,10 @@ impl Element {
 
     /// 在当前元素下是否存在匹配选择器的子元素（不创建子元素引用）
     pub fn element_exists(&self, locator: &str) -> Result<bool, CdpError> {
+        self._element_exists_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    fn _element_exists_inner(&self, locator: &str) -> Result<bool, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -507,6 +515,10 @@ impl Element {
 
     /// 在当前元素下取第一个匹配子元素的属性值（不创建子元素引用）
     pub fn element_attr(&self, locator: &str, attr: &str) -> Result<Option<String>, CdpError> {
+        self._element_attr_inner(locator, attr).map_err(|e| e.with_context(locator))
+    }
+
+    fn _element_attr_inner(&self, locator: &str, attr: &str) -> Result<Option<String>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -528,6 +540,10 @@ impl Element {
 
     /// 在当前元素下按选择器取所有匹配子元素的文本列表（不创建子元素引用，一次 callFunctionOn 返回 JSON 数组字符串）
     pub fn element_texts(&self, locator: &str) -> Result<Vec<String>, CdpError> {
+        self._element_texts_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    fn _element_texts_inner(&self, locator: &str) -> Result<Vec<String>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -550,6 +566,11 @@ impl Element {
 
     /// 在当前元素下按定位器查单个子元素
     pub fn element(&self, locator: &str) -> Result<Option<Element>, CdpError> {
+        self._element_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    /// element 内部实现
+    fn _element_inner(&self, locator: &str) -> Result<Option<Element>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -624,6 +645,11 @@ impl Element {
 
     /// 在当前元素下按定位器查多个子元素
     pub fn elements(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
+        self._elements_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    /// elements 内部实现
+    fn _elements_inner(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,

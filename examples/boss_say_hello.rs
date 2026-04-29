@@ -24,21 +24,22 @@ fn main() -> Result<(), CdpError> {
     // 记录已经打过招呼的
     let mut sayed: Vec<String> = vec![];
     // 打招呼人数
-    let say_limit = 2;
+    let say_limit = 20;
     // 已打招呼的
     let mut sayed_count = 0;
-    // 获取iframe 用于滚动
-    let iframe_ele = page.get_iframe(RECOMMEND_FRAME_LOCATOR)?.unwrap();
 
     while sayed_count < say_limit {
         // 牛人卡片 并排除 含  .similar-geek-wrap 的卡片
-        let eles = page.eles(card_selector)?.into_iter().filter(|ele| {
-            ele.element(".similar-geek-wrap")
-                .map(|e| e.is_none())
-                .unwrap_or(false)
-        });
+        let card_item_eles = page.eles(card_selector)?;
         let mut bk = false;
-        for ele in eles {
+        println!("当前牛人卡片数量: {}", card_item_eles.len());
+        for i in 0..card_item_eles.len() {
+            let card_item_ele = &card_item_eles[i];
+
+            let similar_ele = card_item_ele.element(".similar-geek-wrap")?;
+            if similar_ele.is_some() {
+                continue;
+            }
             if say_limit - sayed_count <= 0 {
                 break;
             }
@@ -48,9 +49,8 @@ fn main() -> Result<(), CdpError> {
                 break;
             }
             // 获取牛人筛选配置 用于筛选打招呼的牛人
-
             // 获取牛人id
-            let card_inner_ele = ele.element(".card-inner")?;
+            let card_inner_ele = card_item_ele.element(".card-inner")?;
             if card_inner_ele.is_none() {
                 continue;
             }
@@ -60,23 +60,35 @@ fn main() -> Result<(), CdpError> {
                 continue;
             }
             // 获取牛人 期望的岗位
-            let expect_job_ele = ele.element(".expect-wrap")?;
+            let expect_job_ele = card_item_ele.element(".expect-wrap")?;
             if expect_job_ele.is_none() {
                 continue;
             }
             let expect_text = expect_job_ele.unwrap().text()?;
 
+            // 获取牛人信息
+            let boss_info_ele = card_item_ele.element(".join-text-wrap.base-info")?;
+            if boss_info_ele.is_none() {
+                continue;
+            }
+            let boss_info_text = boss_info_ele.unwrap().text()?;
+
             // 打招呼按钮
-            let say_hello_btn_ele = ele.element(".btn.btn-greet")?;
+            let say_hello_btn_ele = card_item_ele.element(".btn.btn-greet")?;
             if say_hello_btn_ele.is_none() {
                 continue;
             }
 
             // 点击打招呼
-            say_hello_btn_ele.unwrap().click()?;
+            // say_hello_btn_ele.unwrap().click()?;
             sayed_count += 1;
             sayed.push(geek_id.clone());
-            println!("牛人id: {}, 期望岗位: {}", geek_id.clone(), expect_text);
+            println!(
+                "牛人id: {}, 期望岗位: {}, 牛人信息: {}",
+                geek_id.clone(),
+                expect_text,
+                boss_info_text
+            );
 
             println!("打招呼进度: {}/{}", sayed_count, say_limit);
 
@@ -86,7 +98,9 @@ fn main() -> Result<(), CdpError> {
         if bk {
             break;
         }
-
+        println!("滚动加载更多牛人...");
+        // 获取iframe 用于滚动
+        let iframe_ele = page.get_iframe(RECOMMEND_FRAME_LOCATOR)?.unwrap();
         iframe_ele.run_js("window.scrollTo(0, document.body.scrollHeight);")?;
         sleep_random_ms(1200, 1500);
     }

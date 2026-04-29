@@ -277,6 +277,11 @@ impl Page {
 
     /// 按定位器查单个元素（含 iframe 内；与 DrissionPage 一致使用 DOM.performSearch）
     pub fn element(&self, locator: &str) -> Result<Option<Element>, CdpError> {
+        self._element_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    /// element 内部实现
+    fn _element_inner(&self, locator: &str) -> Result<Option<Element>, CdpError> {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
@@ -354,6 +359,11 @@ impl Page {
 
     /// 按定位器查多个元素（含 iframe 内；与 DrissionPage 一致使用 DOM.performSearch）
     pub fn elements(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
+        self._elements_inner(locator).map_err(|e| e.with_context(locator))
+    }
+
+    /// elements 内部实现
+    fn _elements_inner(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
