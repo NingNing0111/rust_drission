@@ -21,7 +21,7 @@ If your goal is “use DrissionPage-like browser automation from Rust”, `Chrom
 
 ```toml
 [dependencies]
-rust_drission = "0.1.8"
+rust_drission = "0.2"
 ```
 
 ## 3. Minimal example

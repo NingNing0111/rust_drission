@@ -29,18 +29,25 @@ Use this skill when the task is about operating `rust_drission` as a user of the
    - Direct actions: `click`, `input`, `screenshot`
    - JS: `run_js`, `run_js_await`
    - Network: `listen`, `listen_url`, `listen_resource_type`, `listen_collect`
+   - Cookies: `cookies`
 
 3. Drop to `page.tab()` only for lower-level page features
-   - `wait_visible`, `wait_hidden`
+   - `wait_visible`, `wait_hidden`, `wait_element`
    - `run_cdp`
    - `get_frame`, `get_frames`
    - storage and cache APIs
+   - scroll, scroll_to_top, scroll_to_bottom, scroll_by, rect
+   - stop_loading, handle_alert, wait_alert
+   - set_cookie, delete_cookie, evaluate, active_ele
 
 4. Use `Element` for follow-up interactions
-   - `text`, `attr`, `html`, `property`
+   - `text`, `attr`, `html`, `property`, `text_content`, `tag`, `style`
    - `click`, `input`, `clear`, `focus`
    - `is_displayed`, `is_enabled`
    - `select`, `check`, `scroll_into_view`
+   - `parent`, `children`, `prev`, `next`, `child`
+   - `element`, `elements`, `element_text`, `element_exists`, `element_attr`, `element_texts`
+   - `screenshot`, `remove`, `remove_attr`, `drag`, `drag_to`, `hover_at`, `value`
 
 ## Locator Rules
 
@@ -136,6 +143,8 @@ Important: always call `listen()` **before** `page.get()` to avoid missing event
 ## Constraints To Mention When Relevant
 
 - The library targets Chrome / Chromium through CDP
+- On macOS, the library auto-detects Chrome, Chrome Canary, Chromium, Edge, and Brave
+- Error messages are in English (since v0.2.0)
 - `Frame` usage is mainly for same-origin iframes
 - `listen()`, `listen_url()`, `listen_resource_type()`, and `listen_collect()` are directly on `ChromiumPage`
 - Some advanced behaviors require dropping to `Page` or `Browser`

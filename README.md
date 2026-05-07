@@ -16,7 +16,7 @@
 
 ```toml
 [dependencies]
-rust_drission = "0.1.8"
+rust_drission = "0.2"
 ```
 
 ## Quick Start
@@ -148,4 +148,13 @@ tab.set_local_storage("token", "demo-value")?;
 - `listen()` is available directly on `ChromiumPage`, as well as `listen_url()`, `listen_resource_type()`, and `listen_collect()`.
 - Always start the listener **before** navigating, so no network events are missed: `let l = page.listen()?; page.get("...")?;`.
 - Element lookup methods often return `Result<Option<Element>, CdpError>`. Handle the `None` case explicitly.
-- Element lookup methods often return `Result<Option<Element>, CdpError>`. Handle the `None` case explicitly.
+
+## Changelog
+
+### v0.2.0
+
+- All error messages changed from Chinese to English for better internationalization
+- macOS: auto-detect Chrome, Chrome Canary, Chromium, Edge, and Brave browser paths
+- Fixed element lookup fallback logic to avoid false errors when main scan returns no results
+- Added 5 runnable API test examples (navigation, element actions, element queries, browser tabs)
+- Cross-platform example paths (no longer Windows-only)
