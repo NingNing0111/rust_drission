@@ -1,6 +1,6 @@
 [package]
 name = "rust_drission"
-version = "0.1.9"
+version = "0.2.0"
 edition = "2021"
 description = "Browser automation library for Rust via Chrome DevTools Protocol (CDP). Connect or launch Chrome, control pages/elements, run JS, cookies, screenshots, request/response listening. API inspired by DrissionPage."
 readme = "README.md"
