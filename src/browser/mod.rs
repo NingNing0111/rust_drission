@@ -88,7 +88,7 @@ impl Browser {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Target.createTarget 未返回 targetId".into(),
+                message: "Target.createTarget did not return targetId".into(),
             })?;
         let target_id = result;
 
@@ -102,7 +102,7 @@ impl Browser {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Target.attachToTarget 未返回 sessionId".into(),
+                message: "Target.attachToTarget did not return sessionId".into(),
             })?;
         let session_id = result;
 
@@ -123,7 +123,7 @@ impl Browser {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Target.getTargets 无 targetInfos".into(),
+                message: "Target.getTargets did not return targetInfos".into(),
             })?;
         let mut pages = Vec::new();
         for info in list {
@@ -138,7 +138,7 @@ impl Browser {
                 .ok_or_else(|| CdpError::Protocol {
                     id: None,
                     code: -1,
-                    message: "target 无 targetId".into(),
+                    message: "A target entry did not include targetId".into(),
                 })?;
             let params = json!({ "targetId": target_id, "flatten": true });
             let res = self.client.send("Target.attachToTarget", Some(params))?;
@@ -149,7 +149,7 @@ impl Browser {
                 .ok_or_else(|| CdpError::Protocol {
                     id: None,
                     code: -1,
-                    message: "attachToTarget 无 sessionId".into(),
+                    message: "Target.attachToTarget did not return sessionId".into(),
                 })?;
             pages.push(Page::new(
                 Arc::clone(&self.client),
@@ -170,7 +170,7 @@ impl Browser {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Target.getTargets 无 targetInfos".into(),
+                message: "Target.getTargets did not return targetInfos".into(),
             })?;
         let ids: Vec<String> = list
             .iter()
@@ -192,7 +192,7 @@ impl Browser {
         tabs.into_iter().last().ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "没有已打开的 Tab".into(),
+            message: "No open tabs were found".into(),
         })
     }
 
@@ -329,7 +329,7 @@ pub(crate) fn fetch_ws_url_from_endpoint(endpoint: &str) -> Result<String, CdpEr
         .map_err(|e| CdpError::Http(e.to_string()))?;
     let v: JsonVersion = serde_json::from_str(&body).map_err(CdpError::Json)?;
     v.web_socket_debugger_url
-        .ok_or_else(|| CdpError::Http("json/version 中无 webSocketDebuggerUrl".into()))
+        .ok_or_else(|| CdpError::Http("The /json/version response did not include webSocketDebuggerUrl".into()))
 }
 
 #[derive(Deserialize)]
@@ -371,7 +371,7 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
                 std::fs::create_dir_all(&dir).ok();
                 p.to_string()
             } else {
-                return Err(CdpError::Http("无法生成默认 user-data-dir 路径".into()));
+                return Err(CdpError::Http("Failed to build the default user-data-dir path".into()));
             }
         }
     };
@@ -392,7 +392,7 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| CdpError::Http(format!("启动 Chrome 失败: {}", e)))?;
+        .map_err(|e| CdpError::Http(format!("Failed to launch Chrome: {}", e)))?;
 
     for _ in 0..50 {
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -401,7 +401,7 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
         }
     }
     let _ = child.kill();
-    Err(CdpError::Http("Chrome 启动后 5 秒内未就绪".into()))
+    Err(CdpError::Http("Chrome did not become ready within 5 seconds after launch".into()))
 }
 
 /// 解析 Chrome 可执行路径：配置 > 目录+chrome(.exe) > 自动查找
@@ -432,9 +432,27 @@ fn find_chrome_executable() -> String {
     }
     #[cfg(target_os = "macos")]
     {
-        const MAC_PATH: &str = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-        if std::path::Path::new(MAC_PATH).exists() {
-            return MAC_PATH.to_string();
+        const MAC_PATHS: &[&str] = &[
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+        ];
+        for path in MAC_PATHS {
+            if std::path::Path::new(path).exists() {
+                return path.to_string();
+            }
+        }
+        for name in [
+            "google-chrome",
+            "google-chrome-stable",
+            "chromium",
+            "chromium-browser",
+        ] {
+            if let Some(p) = which(name) {
+                return p;
+            }
         }
     }
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -488,7 +506,7 @@ fn get_reg_string(
     key.get_value(name)
 }
 
-#[cfg(all(unix, not(target_os = "macos")))]
+#[cfg(unix)]
 fn which(name: &str) -> Option<String> {
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {

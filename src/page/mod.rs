@@ -64,7 +64,7 @@ impl Page {
                 return Err(CdpError::Protocol {
                     id: None,
                     code: -1,
-                    message: format!("Page.navigate 失败: {}", err),
+                    message: format!("Page.navigate failed: {}", err),
                 });
             }
         }
@@ -100,7 +100,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "无导航历史".into(),
+                message: "No navigation history is available".into(),
             })?;
         let current = result.get("currentIndex").and_then(Value::as_u64).unwrap_or(0) as usize;
         if current == 0 {
@@ -113,7 +113,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "无上一页".into(),
+                message: "No previous page is available in the navigation history".into(),
             })?;
         let params = json!({ "entryId": entry_id });
         self.client.send_with_session("Page.navigateToHistoryEntry", Some(params), Some(self.session_id.as_str()))?;
@@ -133,7 +133,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "无导航历史".into(),
+                message: "No navigation history is available".into(),
             })?;
         let current = result.get("currentIndex").and_then(Value::as_u64).unwrap_or(0) as usize;
         if current + 1 >= entries.len() {
@@ -146,7 +146,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "无下一页".into(),
+                message: "No next page is available in the navigation history".into(),
             })?;
         let params = json!({ "entryId": entry_id });
         self.client.send_with_session("Page.navigateToHistoryEntry", Some(params), Some(self.session_id.as_str()))?;
@@ -285,7 +285,7 @@ impl Page {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         // CSS 查询优先走 Runtime.querySelectorAll(主文档+同源 iframe)，直接拿 objectId，降低动态 DOM 下 nodeId 失效概率。
         if let Some(selector) = loc.to_css_selector() {
@@ -305,17 +305,20 @@ impl Page {
                 )));
             }
             // 同源 iframe 扫描无结果时，回退到主文档 root 下 DOM.querySelector（兼容极端场景）。
-            let root = get_document_root(&self.client, &self.session_id)?;
-            let node_id = query_selector(&self.client, &self.session_id, root, &selector)?;
-            return Ok(node_id.map(|id| {
-                let b = get_backend_node_id(&self.client, &self.session_id, id).ok();
-                Element::new_with_backend(
-                    Arc::clone(&self.client),
-                    self.session_id.clone(),
-                    id,
-                    b,
-                )
-            }));
+            // 回退失败不应导致查找报错，因为主扫描已正确返回无结果。
+            if let Ok(root) = get_document_root(&self.client, &self.session_id) {
+                if let Ok(Some(id)) = query_selector(&self.client, &self.session_id, root, &selector)
+                {
+                    let b = get_backend_node_id(&self.client, &self.session_id, id).ok();
+                    return Ok(Some(Element::new_with_backend(
+                        Arc::clone(&self.client),
+                        self.session_id.clone(),
+                        id,
+                        b,
+                    )));
+                }
+            }
+            return Ok(None);
         }
         if let Some(query) = loc.to_search_query() {
             let (search_id, result_count) =
@@ -367,7 +370,7 @@ impl Page {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         // CSS 查询优先走 Runtime.querySelectorAll(主文档+同源 iframe)，返回 nodeId+objectId 组合。
         if let Some(selector) = loc.to_css_selector() {
@@ -501,7 +504,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: format!("未找到元素: {}", locator),
+                message: format!("Element not found for locator: {}", locator),
             })?;
         el.click()
     }
@@ -513,7 +516,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: format!("未找到元素: {}", locator),
+                message: format!("Element not found for locator: {}", locator),
             })?;
         el.input(text)
     }
@@ -531,7 +534,7 @@ impl Page {
         Err(CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("等待元素超时: {}", locator),
+            message: format!("Timed out while waiting for element: {}", locator),
         })
     }
 
@@ -558,7 +561,7 @@ impl Page {
         Err(CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("等待元素可见超时: {}", locator),
+            message: format!("Timed out while waiting for element to become visible: {}", locator),
         })
     }
 
@@ -579,7 +582,7 @@ impl Page {
         Err(CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("等待元素隐藏超时: {}", locator),
+            message: format!("Timed out while waiting for element to become hidden: {}", locator),
         })
     }
 
@@ -604,7 +607,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Network.getCookies 无 cookies".into(),
+                message: "Network.getCookies did not return any cookies".into(),
             })?;
         let cookies = list
             .iter()
@@ -661,7 +664,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Page.captureScreenshot 无 data".into(),
+                message: "Page.captureScreenshot did not return image data".into(),
             })?;
         let data = base64::Engine::decode(
             &base64::engine::general_purpose::STANDARD,
@@ -669,12 +672,12 @@ impl Page {
         ).map_err(|e| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("base64 解码失败: {}", e),
+            message: format!("Failed to decode base64 data: {}", e),
         })?;
         std::fs::write(path, data).map_err(|e| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("写入文件失败: {}", e),
+            message: format!("Failed to write the file: {}", e),
         })?;
         Ok(())
     }
@@ -695,7 +698,7 @@ impl Page {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "无法监听：缺少 browser_endpoint（请通过 Browser::new_tab 或 Browser::tabs 获取 Page）".into(),
+                message: "Unable to start the listener because browser_endpoint is missing. Get the Page from Browser::new_tab or Browser::tabs first.".into(),
             })?;
         Listener::start(endpoint, &self.target_id)
     }

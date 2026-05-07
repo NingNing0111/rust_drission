@@ -111,13 +111,13 @@ fn escape_attr_value(s: &str) -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LocatorParseError {
-    #[error("缺少前缀（应为 css:/xpath:/text:/attr:/id:/class:/tag:）")]
+    #[error("Missing locator prefix. Expected one of: css:, xpath:, text:, attr:, id:, class:, tag:")]
     MissingPrefix,
-    #[error("冒号后内容为空")]
+    #[error("Locator value is empty after the prefix")]
     EmptyValue,
-    #[error("attr 格式需为 name=value")]
+    #[error("Invalid attr locator format. Expected name=value")]
     AttrNoEquals,
-    #[error("未知定位类型: {0}")]
+    #[error("Unknown locator type: {0}")]
     UnknownKind(String),
 }
 

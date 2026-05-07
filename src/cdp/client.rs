@@ -9,17 +9,17 @@ use tungstenite::Message;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CdpError {
-    #[error("HTTP 请求失败: {0}")]
+    #[error("HTTP request failed: {0}")]
     Http(String),
-    #[error("WebSocket 连接失败: {0}")]
+    #[error("WebSocket connection failed: {0}")]
     Connect(String),
-    #[error("发送失败: {0}")]
+    #[error("Failed to send message: {0}")]
     Send(String),
-    #[error("接收失败: {0}")]
+    #[error("Failed to receive message: {0}")]
     Recv(String),
-    #[error("CDP 错误: id={id:?}, code={code}, message={message}")]
+    #[error("CDP error: id={id:?}, code={code}, message={message}")]
     Protocol { id: Option<i64>, code: i64, message: String },
-    #[error("JSON 错误: {0}")]
+    #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
 
@@ -30,7 +30,7 @@ impl CdpError {
             CdpError::Protocol { id, code, message } => CdpError::Protocol {
                 id,
                 code,
-                message: format!("{} (表达式: {})", message, ctx),
+                message: format!("{} (locator: {})", message, ctx),
             },
             other => other,
         }
@@ -142,7 +142,7 @@ impl CdpClient {
                 .map_err(|e| CdpError::Recv(e.to_string()))?;
             let text = match msg {
                 Message::Text(t) => t,
-                Message::Close(_) => return Err(CdpError::Recv("连接已关闭".into())),
+                Message::Close(_) => return Err(CdpError::Recv("Connection closed".into())),
                 _ => continue,
             };
             let resp: CdpResponse = serde_json::from_str(&text).map_err(CdpError::Json)?;
@@ -159,7 +159,7 @@ impl CdpClient {
                     .ok_or_else(|| CdpError::Protocol {
                         id: Some(expect_id),
                         code: -1,
-                        message: "响应无 result".into(),
+                        message: "CDP response did not include a result payload".into(),
                     });
             }
             // 否则是 event，继续读

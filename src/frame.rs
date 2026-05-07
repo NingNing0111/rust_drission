@@ -87,7 +87,7 @@ impl Frame {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         let do_ele = |root: i64| -> Result<Option<Element>, CdpError> {
             if let Some(selector) = loc.to_css_selector() {
@@ -152,7 +152,7 @@ impl Frame {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         let do_eles = |root: i64| -> Result<Vec<Element>, CdpError> {
             if let Some(selector) = loc.to_css_selector() {
@@ -290,7 +290,7 @@ impl Frame {
         Err(CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("frame 内等待元素超时: {}", locator),
+            message: format!("Timed out while waiting for an element inside the frame: {}", locator),
         })
     }
 

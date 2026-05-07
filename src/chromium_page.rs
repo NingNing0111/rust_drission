@@ -34,7 +34,7 @@ impl ChromiumPage {
             // tabs 为空时创建新标签页；如果创建也失败，panic 是合理的（无法继续）
             browser
                 .new_tab()
-                .expect("无法创建新标签页，浏览器可能已关闭")
+                .expect("Failed to create a new tab. The browser may have been closed")
         });
         stealth::inject(&page)?;
         Ok(Self { browser, page })
@@ -46,7 +46,7 @@ impl ChromiumPage {
         let page = browser.tabs()?.into_iter().next().unwrap_or_else(|| {
             browser
                 .new_tab()
-                .expect("无法创建新标签页，浏览器可能已关闭")
+                .expect("Failed to create a new tab. The browser may have been closed")
         });
         Ok(Self { browser, page })
     }

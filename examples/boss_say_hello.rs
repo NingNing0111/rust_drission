@@ -5,7 +5,9 @@ use std::time::Duration;
 use rust_drission::{utils::sleep_random_ms, BrowserConfig, CdpError, ChromiumPage};
 
 fn main() -> Result<(), CdpError> {
-    let user_data_dir = r#"C:\Users\admin\AppData\Roaming\com.huice.ai\UserData\13"#;
+    // 跨平台用户数据目录（Windows: C:\Users\xxx\..., macOS: /Users/xxx/..., Linux: /home/xxx/...）
+    let user_data_dir = std::env::temp_dir().join("drission_boss_userdata");
+    let user_data_dir = user_data_dir.to_string_lossy().to_string();
 
     let config = BrowserConfig::new()
         .user_data_dir(user_data_dir)

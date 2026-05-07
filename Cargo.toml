@@ -46,3 +46,23 @@ path = "examples/boss_say_hello.rs"
 [[example]]
 name = "network_listen"
 path = "examples/network_listen.rs"
+
+[[example]]
+name = "test_element_find"
+path = "examples/test_element_find.rs"
+
+[[example]]
+name = "test_page_basics"
+path = "examples/test_page_basics.rs"
+
+[[example]]
+name = "test_element_actions"
+path = "examples/test_element_actions.rs"
+
+[[example]]
+name = "test_element_queries"
+path = "examples/test_element_queries.rs"
+
+[[example]]
+name = "test_browser_tabs"
+path = "examples/test_browser_tabs.rs"

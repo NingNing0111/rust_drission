@@ -263,7 +263,7 @@ fn run_listener_loop(
         .ok_or_else(|| CdpError::Protocol {
             id: Some(attach_id),
             code: -1,
-            message: "Target.attachToTarget 无 sessionId".into(),
+            message: "Target.attachToTarget did not return sessionId".into(),
         })?;
 
     // 启用 Network 域
@@ -340,7 +340,7 @@ fn run_listener_loop(
                         .ok_or_else(|| CdpError::Protocol {
                             id: None,
                             code: -1,
-                            message: "requestWillBeSent 无 request".into(),
+                            message: "Network.requestWillBeSent did not include request data".into(),
                         })?;
                     let request_id = params
                         .get("requestId")
@@ -485,7 +485,7 @@ fn read_until_id(
             .map_err(|e| CdpError::Recv(e.to_string()))?;
         let text = match msg {
             Message::Text(t) => t,
-            Message::Close(_) => return Err(CdpError::Recv("连接已关闭".into())),
+            Message::Close(_) => return Err(CdpError::Recv("Connection closed".into())),
             _ => continue,
         };
         let parsed: CdpMessage = serde_json::from_str(&text).map_err(CdpError::Json)?;
@@ -496,7 +496,7 @@ fn read_until_id(
             return Err(CdpError::Protocol {
                 id: Some(expect_id),
                 code: -1,
-                message: "响应无 result".into(),
+                message: "CDP response did not include a result payload".into(),
             });
         }
     }

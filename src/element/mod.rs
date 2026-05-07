@@ -286,7 +286,7 @@ impl Element {
         let obj = result.get("value").and_then(Value::as_object).ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "attrs 非对象".into(),
+            message: "The attrs result was not an object".into(),
         })?;
         let mut map = std::collections::HashMap::new();
         for (k, v) in obj {
@@ -428,7 +428,7 @@ impl Element {
         let v = result.get("value").ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "无 bounding rect".into(),
+            message: "Could not read the element bounding rectangle".into(),
         })?;
         let x = v.get("x").and_then(Value::as_f64).unwrap_or(0.0);
         let y = v.get("y").and_then(Value::as_f64).unwrap_or(0.0);
@@ -449,7 +449,7 @@ impl Element {
             .ok_or_else(|| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Page.captureScreenshot 无 data".into(),
+                message: "Page.captureScreenshot did not return image data".into(),
             })?;
         let data = base64::Engine::decode(
             &base64::engine::general_purpose::STANDARD,
@@ -457,12 +457,12 @@ impl Element {
         ).map_err(|e| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("base64 解码失败: {}", e),
+            message: format!("Failed to decode base64 data: {}", e),
         })?;
         std::fs::write(path, data).map_err(|e| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("写入文件失败: {}", e),
+            message: format!("Failed to write the file: {}", e),
         })?;
         Ok(())
     }
@@ -476,7 +476,7 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(None);
@@ -501,7 +501,7 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(false);
@@ -522,7 +522,7 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(None);
@@ -547,7 +547,7 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(Vec::new());
@@ -574,7 +574,7 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         if let Some(selector) = loc.to_css_selector() {
             // 优先在当前元素 objectId 上执行 querySelector，避免动态 DOM 下 nodeId 易失效问题。
@@ -653,7 +653,7 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("无效 locator: {}", locator),
+            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
         })?;
         if let Some(selector) = loc.to_css_selector() {
             let sel = serde_json::to_string(&selector).map_err(CdpError::Json)?;
@@ -852,7 +852,7 @@ impl Element {
             return Err(CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: format!("select() 只适用于 <select> 元素，当前是 <{}>", tag),
+                message: format!("select() can only be used on <select> elements, but the current element is <{}>", tag),
             });
         }
         let escaped = serde_json::to_string(text_or_value).map_err(CdpError::Json)?;

@@ -30,7 +30,7 @@ pub fn get_document_root(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.getDocument 无 root.nodeId".into(),
+            message: "DOM.getDocument did not return root.nodeId".into(),
         })?;
     Ok(root)
 }
@@ -65,7 +65,7 @@ pub fn query_selector_all(
     let obj = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
-        message: "Runtime.evaluate 无 result".into(),
+        message: "Runtime.evaluate did not return a result payload".into(),
     })?;
     let object_id = obj.get("objectId").and_then(Value::as_str);
     let Some(object_id) = object_id else {
@@ -80,7 +80,7 @@ pub fn query_selector_all(
     let result_val = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
-        message: "Runtime.callFunctionOn 无 result".into(),
+        message: "Runtime.callFunctionOn did not return a result payload".into(),
     })?;
     let list_obj_id = result_val.get("objectId").and_then(Value::as_str);
     let Some(list_obj_id) = list_obj_id else {
@@ -140,7 +140,7 @@ pub fn get_iframe_content_document_node_id(
     let result_val = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
-        message: "Runtime.callFunctionOn 无 result".into(),
+        message: "Runtime.callFunctionOn did not return a result payload".into(),
     })?;
     // 跨域 iframe 时 contentDocument 为 null，subtype 为 "null"
     let obj_id = result_val.get("objectId").and_then(Value::as_str);
@@ -170,7 +170,7 @@ pub fn query_selector_all_under_root(
     let result_val = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
-        message: "Runtime.callFunctionOn 无 result".into(),
+        message: "Runtime.callFunctionOn did not return a result payload".into(),
     })?;
     let list_obj_id = result_val.get("objectId").and_then(Value::as_str);
     let Some(list_obj_id) = list_obj_id else {
@@ -255,7 +255,7 @@ pub fn query_selector_all_including_same_origin_frames(
     let obj = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
-        message: "Runtime.evaluate 无 result".into(),
+        message: "Runtime.evaluate did not return a result payload".into(),
     })?;
     let list_obj_id = obj.get("objectId").and_then(Value::as_str);
     let Some(list_obj_id) = list_obj_id else {
@@ -314,7 +314,7 @@ pub fn get_outer_html(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.getOuterHTML 无 outerHTML".into(),
+            message: "DOM.getOuterHTML did not return outerHTML".into(),
         })
 }
 
@@ -338,7 +338,7 @@ pub fn perform_search(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.performSearch 无 searchId".into(),
+            message: "DOM.performSearch did not return searchId".into(),
         })?
         .to_string();
     let result_count = result
@@ -405,7 +405,7 @@ pub fn resolve_node_to_object_id(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.resolveNode 无 object.objectId".into(),
+            message: "DOM.resolveNode did not return object.objectId".into(),
         })
 }
 
@@ -425,7 +425,7 @@ pub fn get_backend_node_id(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.describeNode 无 node.backendNodeId".into(),
+            message: "DOM.describeNode did not return node.backendNodeId".into(),
         })
 }
 
@@ -445,7 +445,7 @@ pub fn resolve_backend_to_object_id(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.resolveNode(backendNodeId) 无 object.objectId".into(),
+            message: "DOM.resolveNode(backendNodeId) did not return object.objectId".into(),
         })
 }
 
@@ -465,6 +465,6 @@ pub fn get_node_id_from_backend(
         .ok_or_else(|| CdpError::Protocol {
             id: None,
             code: -1,
-            message: "DOM.describeNode 无 node.nodeId".into(),
+            message: "DOM.describeNode did not return node.nodeId".into(),
         })
 }
