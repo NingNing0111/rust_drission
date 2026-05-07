@@ -144,6 +144,7 @@ Important: always call `listen()` **before** `page.get()` to avoid missing event
 
 - The library targets Chrome / Chromium through CDP
 - On macOS, the library auto-detects Chrome, Chrome Canary, Chromium, Edge, and Brave
+- When using `user_data_dir`, Singleton lock files from crashed sessions are automatically cleaned up before launch (since v0.2.1)
 - Error messages are in English (since v0.2.0)
 - `Frame` usage is mainly for same-origin iframes
 - `listen()`, `listen_url()`, `listen_resource_type()`, and `listen_collect()` are directly on `ChromiumPage`

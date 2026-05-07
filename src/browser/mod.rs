@@ -377,6 +377,12 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
     };
     args.push(format!("--user-data-dir={}", user_data_dir));
 
+    // 清理 Singleton 锁文件，避免浏览器异常退出后无法重新启动
+    for f in &["SingletonLock", "SingletonCookie", "SingletonSocket"] {
+        let lock_path = std::path::Path::new(&user_data_dir).join(f);
+        std::fs::remove_file(&lock_path).ok();
+    }
+
     args.push("--window-size=1920,1080".to_string());
     if config.get_headless() {
         let has_headless = config.get_args().iter().any(|a| a.starts_with("--headless"));

@@ -151,6 +151,10 @@ tab.set_local_storage("token", "demo-value")?;
 
 ## Changelog
 
+### v0.2.1
+
+- Fix: clean up Chrome Singleton lock files (`SingletonLock`, `SingletonCookie`, `SingletonSocket`) in `user_data_dir` before browser launch, preventing startup failures when a previous browser instance crashed or was killed unexpectedly
+
 ### v0.2.0
 
 - All error messages changed from Chinese to English for better internationalization
