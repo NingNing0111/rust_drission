@@ -151,6 +151,10 @@ tab.set_local_storage("token", "demo-value")?;
 
 ## Changelog
 
+### v0.2.2
+
+- Fix: when a custom `user_data_dir` is specified via `BrowserConfig::user_data_dir()`, the directory is now auto-created before Chrome starts. Previously it was only created for auto-generated temp paths, which could cause Chrome to show a "Cannot perform read/write operations" system dialog on Windows when the directory didn't exist.
+
 ### v0.2.1
 
 - Fix: clean up Chrome Singleton lock files (`SingletonLock`, `SingletonCookie`, `SingletonSocket`) in `user_data_dir` before browser launch, preventing startup failures when a previous browser instance crashed or was killed unexpectedly
