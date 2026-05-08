@@ -359,7 +359,16 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
 
     // 与 DrissionPage 一致：未指定时使用临时目录 userData/{port}
     let user_data_dir = match config.get_user_data_dir() {
-        Some(d) => d.to_string(),
+        Some(d) => {
+            let path = std::path::Path::new(d);
+            if let Err(e) = std::fs::create_dir_all(path) {
+                return Err(CdpError::Http(format!(
+                    "Failed to create user data directory '{}': {}",
+                    d, e
+                )));
+            }
+            d.to_string()
+        }
         None => {
             let tmp = config
                 .get_tmp_path()
@@ -368,7 +377,12 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
                 .unwrap_or_else(std::env::temp_dir);
             let dir = tmp.join("DrissionPage").join("userData").join(port.to_string());
             if let Some(p) = dir.to_str() {
-                std::fs::create_dir_all(&dir).ok();
+                if let Err(e) = std::fs::create_dir_all(&dir) {
+                    return Err(CdpError::Http(format!(
+                        "Failed to create default user data directory '{}': {}",
+                        p, e
+                    )));
+                }
                 p.to_string()
             } else {
                 return Err(CdpError::Http("Failed to build the default user-data-dir path".into()));
