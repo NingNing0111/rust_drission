@@ -8,94 +8,77 @@ use serde_json::json;
 /// 需在 goto 之前调用，或对已打开的页面仅对后续导航生效
 pub fn inject(page: &Page) -> Result<(), CdpError> {
     let script = r#"
-// 反检测脚本 - 用于浏览器页面注入
-(() => {
-  "use strict";
+(function () {
+    'use strict';
 
-  // 1. 保存原生 Function.prototype.toString
-  const nativeFunctionToString = Function.prototype.toString;
+    // 1. 缓存原始方法，用于内部调用（如果不小心报错可以自救）
+    const rawToString = Function.prototype.toString;
+    const rawSetInterval = window.setInterval;
+    const rawClear = console.clear;
 
-  // 2. WeakMap：函数 → 伪原生源码
-  const nativeSourceMap = new WeakMap();
-
-  // 3. 注册伪原生源码
-  const registerNativeSource = (fn, source) => {
-    try {
-      nativeSourceMap.set(fn, source);
-    } catch (_) {}
-  };
-
-  // 4. 劫持 Function.prototype.toString
-  Object.defineProperty(Function.prototype, "toString", {
-    configurable: true,
-    writable: true,
-    value: function toString() {
-      if (nativeSourceMap.has(this)) {
-        return nativeSourceMap.get(this);
-      }
-      return nativeFunctionToString.call(this);
-    },
-  });
-
-  // 5. 伪装 Function.prototype.toString 自身
-  registerNativeSource(
-    Function.prototype.toString,
-    nativeFunctionToString.toString(),
-  );
-
-  // 6. stealthify：包装函数但保持"原生外观"
-  const stealthify = (obj, prop, handler) => {
-    const original = obj[prop];
-    if (typeof original !== "function") return;
-
-    const wrapped = function (...args) {
-      return handler.call(this, original, args);
+    // 2. 核心：万能伪装函数，确保任何被修改的方法看起来都像原生的
+    const makeNative = (fn, name) => {
+        const wrapper = {
+            [name]: function () { return fn.apply(this, arguments); }
+        }[name];
+        // 关键：修改 toString 指向
+        wrapper.toString = () => `function ${name}() { [native code] }`;
+        return wrapper;
     };
+
+    // 3. 彻底屏蔽 Console：不只是 table，是全家桶
+    // 网站现在打印数组、div、时间，全部都是通过这些方法
+    const silent = () => {};
+    const consoleMethods = ['log', 'debug', 'info', 'warn', 'error', 'table', 'clear', 'dir', 'group', 'groupCollapsed'];
     
-    // 处理函数 name 属性
-    const namePropertyDescriptor = Object.getOwnPropertyDescriptor(wrapped, "name");
-    Object.defineProperty(wrapped, "name", {
-      ...namePropertyDescriptor,
-      value: prop,
-    });
-    
-    // 保留 prototype
-    try {
-      Object.setPrototypeOf(wrapped, Object.getPrototypeOf(original));
-    } catch (_) {}
-
-    // 注册伪原生源码
-    registerNativeSource(wrapped, nativeFunctionToString.call(original));
-
-    // 用 defineProperty 保持 descriptor 接近原生
-    const desc = Object.getOwnPropertyDescriptor(obj, prop);
-    Object.defineProperty(obj, prop, {
-      ...desc,
-      value: wrapped,
-    });
-  };
-
-  // 7. 过滤 console 参数，避免触发属性 getter
-  const filterConsoleArgs = (args) =>
-    args.map((arg) => {
-      if (arg && typeof arg === "object") {
-        return {};  // 返回空对象避免访问原有属性
-      }
-      return arg;
+    consoleMethods.forEach(method => {
+        // 直接用一个不执行任何操作的空函数覆盖
+        // 使用 Object.defineProperty 确保它不容易被网站改回去
+        Object.defineProperty(console, method, {
+            value: makeNative(silent, method),
+            writable: false,
+            configurable: false
+        });
     });
 
-  // 8. 劫持 console 方法
-  ["log", "debug", "info", "warn", "error", "dir", "table"].forEach((name) => {
-    stealthify(console, name, (original, args) => {
-      return original.apply(console, filterConsoleArgs(args));
+    // 4. 时序检测防御：修复 performance.now
+    const start = Date.now();
+    Object.defineProperty(performance, 'now', {
+        value: makeNative(() => Date.now() - start, 'now'),
+        configurable: false
     });
-  });
 
-  // 9. 防御性补丁 - 隐藏 registerNativeSource 真实源码
-  registerNativeSource(
-    registerNativeSource,
-    "function registerNativeSource() { [native code] }",
-  );
+    // 5. 拦截“强制跳转”和“自动关闭”
+    // 网站在检测到控制台后会尝试 window.close() 或 location.replace
+    window.addEventListener('beforeunload', (e) => {
+        e.preventDefault();
+        e.returnValue = ''; // 阻止页面自动跳转到 about:blank
+    });
+
+    // 屏蔽 location.replace 到空白页
+    const rawReplace = location.replace;
+    location.replace = makeNative(function(url) {
+        if (url.includes('about:blank')) return;
+        return rawReplace.call(location, url);
+    }, 'replace');
+
+    // 6. 拦截定时器炸弹
+    // 图中反复出现的 Sat May 09 ... 说明它在一个 setInterval 里
+    window.setInterval = makeNative((fn, delay, ...args) => {
+        if (typeof fn === 'string' && fn.includes('debugger')) return -1;
+        if (typeof fn === 'function') {
+            const str = rawToString.call(fn);
+            // 如果函数体内包含大量的 console 或 debugger，直接不运行
+            if (str.includes('debugger') || (str.match(/console/g) || []).length > 5) {
+                return -1; 
+            }
+        }
+        return rawSetInterval(fn, delay, ...args);
+    }, 'setInterval');
+
+    // 7. 特征抹除：针对 navigator.webdriver
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+
 })();
 "#;
     let params = json!({ "source": script });

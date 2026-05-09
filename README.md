@@ -158,6 +158,11 @@ tab.set_local_storage("token", "demo-value")?;
 
 ## Changelog
 
+### v0.2.4
+
+- Improve stealth injection defaults on newly created `ChromiumPage` instances: suppress common console-based anti-debug hooks, mask `navigator.webdriver`, block `location.replace("about:blank")`, and filter suspicious `setInterval` debugger loops.
+- Add a simple Boss Zhipin example at `examples/boss.rs` for opening the candidate list page with a persistent `user_data_dir`.
+
 ### v0.2.3
 
 - Fix: XPath and Text locators now query the live DOM via `Runtime.evaluate` instead of querying CDP's stale internal DOM snapshot (`DOM.performSearch`). This fixes `page.wait()` timing out for dynamically-created elements when using XPath / Text locators.
