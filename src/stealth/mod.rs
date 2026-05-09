@@ -48,13 +48,6 @@ pub fn inject(page: &Page) -> Result<(), CdpError> {
         configurable: false
     });
 
-    // 5. 拦截“强制跳转”和“自动关闭”
-    // 网站在检测到控制台后会尝试 window.close() 或 location.replace
-    window.addEventListener('beforeunload', (e) => {
-        e.preventDefault();
-        e.returnValue = ''; // 阻止页面自动跳转到 about:blank
-    });
-
     // 屏蔽 location.replace 到空白页
     const rawReplace = location.replace;
     location.replace = makeNative(function(url) {

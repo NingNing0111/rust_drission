@@ -47,6 +47,7 @@ fn default_chrome_args() -> Vec<&'static str> {
         "--hide-crash-restore-bubble",
         "--disable-features=PrivacySandboxSettings4",
         "--disable-blink-features=AutomationControlled",
+        "--no-sandbox"
     ]
 }
 
