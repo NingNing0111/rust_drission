@@ -326,6 +326,7 @@ mod tests {
     }
 
     /// Compile-time assertion: ChromiumPage::new must keep this exact signature.
+    /// If this test compiles, the signature is verified.
     #[test]
     fn chromium_page_new_keeps_existing_signature() {
         const NEW_SIG: Option<fn(BrowserConfig) -> Result<ChromiumPage, CdpError>> =
