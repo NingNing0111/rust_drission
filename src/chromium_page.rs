@@ -28,15 +28,27 @@ pub struct ChromiumPage {
 impl ChromiumPage {
     /// 连接已有浏览器或启动新浏览器，并绑定当前标签页（与 DrissionPage `ChromiumPage(addr_or_opts)` 一致）。
     /// 若有已存在标签页则使用第一个，否则新建 about:blank 标签页。
+    /// 默认注入 stealth 反检测脚本。
     pub fn new(config: BrowserConfig) -> Result<Self, CdpError> {
+        Self::build(config, true)
+    }
+
+    /// 与 [`new`](Self::new) 相同，但跳过 stealth 反检测脚本注入。
+    pub fn new_without_stealth(config: BrowserConfig) -> Result<Self, CdpError> {
+        Self::build(config, false)
+    }
+
+    /// 共享构造逻辑：连接或启动浏览器，绑定标签页，按需注入 stealth。
+    fn build(config: BrowserConfig, inject_stealth: bool) -> Result<Self, CdpError> {
         let browser = Browser::connect_or_launch(config)?;
         let page = browser.tabs()?.into_iter().next().unwrap_or_else(|| {
-            // tabs 为空时创建新标签页；如果创建也失败，panic 是合理的（无法继续）
             browser
                 .new_tab()
                 .expect("Failed to create a new tab. The browser may have been closed")
         });
-        stealth::inject(&page)?;
+        if inject_stealth {
+            stealth::inject(&page)?;
+        }
         Ok(Self { browser, page })
     }
 
@@ -296,5 +308,23 @@ impl ChromiumPage {
         F: FnMut(&DataPacket) -> bool,
     {
         listener.collect(timeout, on_packet)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Compile-time assertion: new_without_stealth exists with the expected
+    /// signature `fn(BrowserConfig) -> Result<ChromiumPage, CdpError>`.
+    #[test]
+    fn chromium_page_new_without_stealth_has_expected_signature() {
+        // If this compiles, the public function exists with the right types.
+        fn _assert_signature(
+            f: fn(BrowserConfig) -> Result<ChromiumPage, CdpError>,
+        ) {
+            let _ = f;
+        }
+        _assert_signature(ChromiumPage::new_without_stealth);
     }
 }
