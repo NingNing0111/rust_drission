@@ -1,6 +1,6 @@
 [package]
 name = "rust_drission"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "Browser automation library for Rust via Chrome DevTools Protocol (CDP). Connect or launch Chrome, control pages/elements, run JS, cookies, screenshots, request/response listening. API inspired by DrissionPage."
 readme = "README.md"
@@ -70,3 +70,11 @@ path = "examples/test_browser_tabs.rs"
 [[example]]
 name = "test_user_data_dir"
 path = "examples/test_user_data_dir.rs"
+
+[[example]]
+name = "test_page_wait"
+path = "examples/test_page_wait.rs"
+
+[[example]]
+name = "page_wait_demo"
+path = "examples/page_wait_demo.rs"

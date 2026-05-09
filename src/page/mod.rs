@@ -351,7 +351,14 @@ impl Page {
                 let params = json!({ "objectId": oid });
                 let res = self.client.send_with_session("DOM.requestNode", Some(params), Some(self.session_id.as_str()))?;
                 if let Some(nid) = res.get("nodeId").and_then(Value::as_i64) {
-                    return Ok(Some(Element::new(Arc::clone(&self.client), self.session_id.clone(), nid)));
+                    let b = get_backend_node_id(&self.client, &self.session_id, nid).ok();
+                    return Ok(Some(Element::new_with_object_id(
+                        Arc::clone(&self.client),
+                        self.session_id.clone(),
+                        nid,
+                        Some(oid.to_string()),
+                        b,
+                    )));
                 }
             }
             Ok(None)

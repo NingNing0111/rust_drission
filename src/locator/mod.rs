@@ -90,9 +90,9 @@ impl Locator {
         }
     }
 
-    /// 得到用于 DOM.performSearch 的查询字符串（CSS 或 XPath），可搜索整棵 DOM 树（含 iframe）
+    /// 得到用于 DOM.performSearch 的查询字符串（仅 CSS）。XPath/Text 走 Runtime.evaluate 以保持实时 DOM 可见性
     pub fn to_search_query(&self) -> Option<String> {
-        self.to_css_selector().or_else(|| self.to_xpath_expression())
+        self.to_css_selector()
     }
 }
 
