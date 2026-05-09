@@ -25,14 +25,14 @@ Use this skill when the task is about operating `rust_drission` as a user of the
 2. Treat `ChromiumPage` as the high-level surface
    - Navigation: `get`, `refresh`, `back`, `forward`
    - Page info: `title`, `url`, `html`
-   - Element lookup: `ele`, `eles`
+   - Element lookup: `ele`, `eles`, `wait`
    - Direct actions: `click`, `input`, `screenshot`
    - JS: `run_js`, `run_js_await`
    - Network: `listen`, `listen_url`, `listen_resource_type`, `listen_collect`
    - Cookies: `cookies`
 
 3. Drop to `page.tab()` only for lower-level page features
-   - `wait_visible`, `wait_hidden`, `wait_element`
+   - `wait_visible`, `wait_hidden`, `wait_element`, `wait_network_idle`
    - `run_cdp`
    - `get_frame`, `get_frames`
    - storage and cache APIs
@@ -139,6 +139,28 @@ println!("collected {} packets", packets.len());
 ```
 
 Important: always call `listen()` **before** `page.get()` to avoid missing events.
+
+### Wait for elements to appear / become visible / disappear
+
+```rust
+use std::time::Duration;
+
+// Wait for an element to exist in the DOM (ChromiumPage method)
+if let Ok(el) = page.wait(".item-list", Duration::from_secs(5)) {
+    println!("loaded: {}", el.text()?);
+}
+
+// Wait for a modal to become visible (Page method, via tab())
+let modal = page.tab().wait_visible("#modal", Duration::from_secs(10))?;
+
+// Wait for a loading spinner to disappear
+page.tab().wait_hidden("#spinner", Duration::from_secs(5))?;
+
+// Wait for network requests to settle (no active requests for 2s)
+page.tab().wait_network_idle()?;
+```
+
+All locator types are supported: `css:`, `xpath:`, `text:`, `id:`, `class:`, `tag:`, and bare CSS.
 
 ## Constraints To Mention When Relevant
 

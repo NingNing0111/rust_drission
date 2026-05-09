@@ -130,8 +130,15 @@ let async_result = page.run_js_await("fetch('https://httpbin.org/get').then(r =>
 ```rust
 use std::time::Duration;
 
+// wait() is on ChromiumPage; all other wait_* methods are on Page (via tab())
+if let Ok(el) = page.wait(".item-list", Duration::from_secs(5)) {
+    println!("loaded: {}", el.text()?);
+}
+
 let tab = page.tab();
 tab.wait_visible("css:.result", Duration::from_secs(10))?;
+tab.wait_hidden("#spinner", Duration::from_secs(5))?;
+tab.wait_network_idle()?;
 tab.set_local_storage("token", "demo-value")?;
 ```
 
@@ -150,6 +157,11 @@ tab.set_local_storage("token", "demo-value")?;
 - Element lookup methods often return `Result<Option<Element>, CdpError>`. Handle the `None` case explicitly.
 
 ## Changelog
+
+### v0.2.3
+
+- Fix: XPath and Text locators now query the live DOM via `Runtime.evaluate` instead of querying CDP's stale internal DOM snapshot (`DOM.performSearch`). This fixes `page.wait()` timing out for dynamically-created elements when using XPath / Text locators.
+- Fix: preserve `objectId` when constructing `Element` from XPath evaluation results, so that `tag()` and `text()` return correct values instead of empty strings.
 
 ### v0.2.2
 
