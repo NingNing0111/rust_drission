@@ -28,7 +28,7 @@ pub struct ChromiumPage {
 impl ChromiumPage {
     /// 连接已有浏览器或启动新浏览器，并绑定当前标签页（与 DrissionPage `ChromiumPage(addr_or_opts)` 一致）。
     /// 若有已存在标签页则使用第一个，否则新建 about:blank 标签页。
-    /// 默认注入 stealth 反检测脚本。
+    /// 默认注入 stealth 反检测脚本；如需禁用请用 [`new_without_stealth`](Self::new_without_stealth).
     pub fn new(config: BrowserConfig) -> Result<Self, CdpError> {
         Self::build(config, true)
     }

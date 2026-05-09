@@ -5,6 +5,8 @@
 //!
 //! # 快速开始（与 DrissionPage 一致）
 //!
+//! `ChromiumPage::new()` 默认注入 stealth 反检测脚本；如需禁用请用 [`new_without_stealth`](ChromiumPage::new_without_stealth)。
+//!
 //! ```no_run
 //! use rust_drission::ChromiumPage;
 //! use rust_drission::BrowserConfig;
