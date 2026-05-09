@@ -319,12 +319,17 @@ mod tests {
     /// signature `fn(BrowserConfig) -> Result<ChromiumPage, CdpError>`.
     #[test]
     fn chromium_page_new_without_stealth_has_expected_signature() {
-        // If this compiles, the public function exists with the right types.
-        fn _assert_signature(
-            f: fn(BrowserConfig) -> Result<ChromiumPage, CdpError>,
-        ) {
+        fn assert_signature(f: fn(BrowserConfig) -> Result<ChromiumPage, CdpError>) {
             let _ = f;
         }
-        _assert_signature(ChromiumPage::new_without_stealth);
+        assert_signature(ChromiumPage::new_without_stealth);
+    }
+
+    /// Compile-time assertion: ChromiumPage::new must keep this exact signature.
+    #[test]
+    fn chromium_page_new_keeps_existing_signature() {
+        const NEW_SIG: Option<fn(BrowserConfig) -> Result<ChromiumPage, CdpError>> =
+            Some(ChromiumPage::new);
+        let _ = NEW_SIG;
     }
 }
