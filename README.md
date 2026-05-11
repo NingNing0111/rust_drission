@@ -165,6 +165,12 @@ tab.set_local_storage("token", "demo-value")?;
 
 ## Changelog
 
+### v0.2.5
+
+- Make `ChromiumPage::new(...)` always launch a fresh browser instance instead of attaching to an existing remote-debugging session.
+- Inject the built-in stealth script into tabs created by `ChromiumPage::new_tab(...)`, and add `new_without_stealth(...)` / `new_tab_without_stealth(...)` for callers that need a clean tab.
+- Add `Page::listen_url(...)` and `Page::listen_resource_type(...)` helpers alongside the existing `ChromiumPage` listener filters.
+
 ### v0.2.4
 
 - Improve stealth injection defaults on newly created `ChromiumPage` instances: suppress common console-based anti-debug hooks, mask `navigator.webdriver`, block `location.replace("about:blank")`, and filter suspicious `setInterval` debugger loops.
