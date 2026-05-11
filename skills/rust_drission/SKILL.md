@@ -35,6 +35,7 @@ Use this skill when the task is about operating `rust_drission` as a user of the
    - `wait_visible`, `wait_hidden`, `wait_element`, `wait_network_idle`
    - `run_cdp`
    - `get_frame`, `get_frames`
+   - page-level `listen`, `listen_url`, `listen_resource_type`
    - storage and cache APIs
    - scroll, scroll_to_top, scroll_to_bottom, scroll_by, rect
    - stop_loading, handle_alert, wait_alert
@@ -78,6 +79,26 @@ When asked to show how to do something with `rust_drission`:
 - Keep the explanation usage-oriented, not architecture-oriented
 
 ## Common Recipes
+
+### Start a browser with stealth enabled by default
+
+```rust
+use rust_drission::{BrowserConfig, ChromiumPage, CdpError};
+
+fn main() -> Result<(), CdpError> {
+    let page = ChromiumPage::new(
+        BrowserConfig::new()
+            .user_data_dir("./data/profile")
+            .headless(false),
+    )?;
+
+    page.get("https://example.com")?;
+    println!("{}", page.title()?);
+    Ok(())
+}
+```
+
+Use `ChromiumPage::new_without_stealth(...)` when you need a clean tab without the built-in stealth script.
 
 ### Open a page and read its title
 
@@ -130,6 +151,10 @@ if let Some(pkt) = url_listener.wait(Duration::from_secs(5))? {
 
 // Filter by resource type
 let fetch_listener = page.listen_resource_type("Fetch")?;
+page.run_js_await("fetch('https://httpbin.org/get').then(r => r.json())")?;
+if let Some(pkt) = fetch_listener.wait(Duration::from_secs(5))? {
+    println!("Fetch: {} → {}", pkt.request.url, pkt.response.status.unwrap_or(0));
+}
 
 // Batch collect after navigation
 let listener = page.listen()?;
@@ -164,10 +189,11 @@ All locator types are supported: `css:`, `xpath:`, `text:`, `id:`, `class:`, `ta
 
 ## Constraints To Mention When Relevant
 
-- The library targets Chrome / Chromium through CDP
+- `ChromiumPage::new(...)` launches a fresh browser and injects the built-in stealth script by default; `new_without_stealth(...)` and `new_tab_without_stealth(...)` are available when you want a clean tab
+- `ChromiumPage::connect(...)` attaches to an already-running browser without launching a new process
 - On macOS, the library auto-detects Chrome, Chrome Canary, Chromium, Edge, and Brave
 - When using `user_data_dir`, the directory is automatically created if it doesn't exist (since v0.2.2). Singleton lock files from crashed sessions are also cleaned up before launch (since v0.2.1)
-- `ChromiumPage::new(...)` injects the built-in stealth script by default; in v0.2.4 it became more aggressive about masking `navigator.webdriver`, suppressing console-based anti-debug hooks, blocking `about:blank` redirects, and filtering suspicious `setInterval` debugger loops
+- In v0.2.4, stealth injection became more aggressive about masking `navigator.webdriver`, suppressing console-based anti-debug hooks, blocking `about:blank` redirects, and filtering suspicious `setInterval` debugger loops
 - Error messages are in English (since v0.2.0)
 - `Frame` usage is mainly for same-origin iframes
 - `listen()`, `listen_url()`, `listen_resource_type()`, and `listen_collect()` are directly on `ChromiumPage`

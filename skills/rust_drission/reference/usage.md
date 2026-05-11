@@ -54,7 +54,7 @@ fn main() -> Result<(), CdpError> {
 
 ### 4.1 Launch a new Chrome instance
 
-This is the most common workflow.
+This is the most common workflow. `ChromiumPage::new(...)` launches a fresh browser and injects the built-in stealth script into the initial tab.
 
 ```rust
 use rust_drission::{BrowserConfig, ChromiumPage};
@@ -67,6 +67,8 @@ let page = ChromiumPage::new(
         .headless(false),
 )?;
 ```
+
+If you want the initial tab without stealth injection, use `ChromiumPage::new_without_stealth(...)`.
 
 Common configuration methods:
 

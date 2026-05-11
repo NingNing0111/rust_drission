@@ -6,11 +6,12 @@
 
 ## Why `ChromiumPage`
 
-- One entry point for launch/connect, navigation, element lookup, JS execution, screenshots, cookies, and tab access
+- One entry point for browser launch, navigation, element lookup, JS execution, screenshots, cookies, and tab access
 - DrissionPage-style locator strings such as `css:`, `xpath:`, `text:`, `id:`, `class:`, `tag:`
 - Supports direct JS/CDP calls when the high-level API is not enough
 - Keeps advanced capabilities available through `page.tab()` and `page.browser()`
 - Built-in network traffic listening with URL/resource-type filtering and batch collection
+- Built-in stealth injection by default for the initial tab and `new_tab()`
 
 ## Installation
 
@@ -48,6 +49,8 @@ fn main() -> Result<(), CdpError> {
 
 ### Launch a new Chrome
 
+`ChromiumPage::new(...)` starts a fresh browser instance and injects the built-in stealth script into the initial tab.
+
 ```rust
 use rust_drission::{BrowserConfig, ChromiumPage};
 
@@ -59,6 +62,8 @@ let page = ChromiumPage::new(
         .headless(false),
 )?;
 ```
+
+If you want to skip stealth injection for the initial tab, use `ChromiumPage::new_without_stealth(...)`.
 
 ### Connect to an existing Chrome
 
@@ -75,6 +80,8 @@ use rust_drission::ChromiumPage;
 
 let page = ChromiumPage::connect("127.0.0.1:9222")?;
 ```
+
+Use `connect(...)` only when you want to attach to an already-running browser instead of launching a fresh one.
 
 ### Locate and operate on elements
 
