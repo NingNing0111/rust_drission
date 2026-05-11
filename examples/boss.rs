@@ -10,11 +10,13 @@ fn main() -> Result<(), CdpError> {
     let config = BrowserConfig::new()
         .user_data_dir(user_data_dir)
         .headless(false);
-    let page = ChromiumPage::new(config)?;
+    let mut page = ChromiumPage::new(config)?;
 
     // 进入到牛人页
     page.get("https://www.zhipin.com/web/geek/jobs")?;
 
+    sleep_random_ms(1000,3000);
+    page.close_browser();
     sleep_random_ms(30000, 60000);
 
     Ok(())

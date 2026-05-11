@@ -23,6 +23,7 @@ pub struct Cookie {
 }
 
 /// 单个 Tab 页面，对应 CDP 的一个 target session
+#[derive(Clone)]
 pub struct Page {
     pub(crate) client: Arc<CdpClient>,
     pub(crate) session_id: String,
@@ -708,6 +709,18 @@ impl Page {
                 message: "Unable to start the listener because browser_endpoint is missing. Get the Page from Browser::new_tab or Browser::tabs first.".into(),
             })?;
         Listener::start(endpoint, &self.target_id)
+    }
+
+    /// 启动监听并按 URL 过滤，只保留 URL 包含指定字符串的数据包。
+    pub fn listen_url(&self, url_contains: &str) -> Result<Listener, CdpError> {
+        let listener = self.listen()?;
+        Ok(Listener::filter_url(listener, url_contains.to_string()))
+    }
+
+    /// 启动监听并按资源类型过滤（如 "XHR", "Fetch", "Document", "Script" 等）。
+    pub fn listen_resource_type(&self, resource_type: &str) -> Result<Listener, CdpError> {
+        let listener = self.listen()?;
+        Ok(Listener::filter_resource_type(listener, resource_type.to_string()))
     }
 
     /// 当前 Tab 的 target ID（与 DrissionPage `tab_id` 一致）

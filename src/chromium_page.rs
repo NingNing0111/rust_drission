@@ -40,7 +40,7 @@ impl ChromiumPage {
 
     /// 共享构造逻辑：连接或启动浏览器，绑定标签页，按需注入 stealth。
     fn build(config: BrowserConfig, inject_stealth: bool) -> Result<Self, CdpError> {
-        let browser = Browser::connect_or_launch(config)?;
+        let browser = Browser::launch(config)?;
         let page = browser.tabs()?.into_iter().next().unwrap_or_else(|| {
             browser
                 .new_tab()
@@ -145,6 +145,15 @@ impl ChromiumPage {
 
     /// 新建标签页并返回 Page；可选 url 则在新标签页中打开（与 DrissionPage `new_tab(url)` 一致）
     pub fn new_tab(&self, url: Option<&str>) -> Result<Page, CdpError> {
+        let tab = self.browser.new_tab()?;
+        stealth::inject(&tab)?;
+        if let Some(u) = url {
+            tab.goto(u)?;
+        }
+        Ok(tab)
+    }
+
+    pub fn new_tab_without_stealth(&self, url: Option<&str>) -> Result<Page, CdpError> {
         let tab = self.browser.new_tab()?;
         if let Some(u) = url {
             tab.goto(u)?;
