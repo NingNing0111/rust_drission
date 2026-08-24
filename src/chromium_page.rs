@@ -129,7 +129,7 @@ impl ChromiumPage {
     }
 
     /// 等待定位器匹配到元素（与 DrissionPage `wait.ele_loaded()` 一致）
-    pub fn wait(&self, locator: &str, timeout: Duration) -> Result<Element, CdpError> {
+    pub fn wait(&self, locator: &str, timeout: Duration) -> Result<Option<Element>, CdpError> {
         self.page.wait(locator, timeout)
     }
 
@@ -277,7 +277,10 @@ impl ChromiumPage {
     /// ```
     pub fn listen_resource_type(&self, resource_type: &str) -> Result<Listener, CdpError> {
         let listener = self.page.listen()?;
-        Ok(Listener::filter_resource_type(listener, resource_type.to_string()))
+        Ok(Listener::filter_resource_type(
+            listener,
+            resource_type.to_string(),
+        ))
     }
 
     /// 从已有监听器持续收集数据包到 `Vec`，直到超时或闭包返回 `false`。

@@ -47,13 +47,16 @@ fn default_chrome_args() -> Vec<&'static str> {
         "--hide-crash-restore-bubble",
         "--disable-features=PrivacySandboxSettings4",
         "--disable-blink-features=AutomationControlled",
-        "--no-sandbox"
+        "--no-sandbox",
     ]
 }
 
 impl BrowserConfig {
     fn default_args() -> Vec<String> {
-        default_chrome_args().into_iter().map(String::from).collect()
+        default_chrome_args()
+            .into_iter()
+            .map(String::from)
+            .collect()
     }
 
     pub fn new() -> Self {
@@ -131,7 +134,8 @@ impl BrowserConfig {
     /// 移除已存在的某条参数（按前缀匹配，如 --headless 会移除 --headless=new）
     pub fn remove_argument(mut self, arg_prefix: impl AsRef<str>) -> Self {
         let prefix = arg_prefix.as_ref();
-        self.args.retain(|a| a != prefix && !a.starts_with(&format!("{}=", prefix)));
+        self.args
+            .retain(|a| a != prefix && !a.starts_with(&format!("{}=", prefix)));
         self
     }
 

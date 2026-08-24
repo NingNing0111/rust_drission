@@ -48,7 +48,11 @@ impl Locator {
             return Err(LocatorParseError::EmptyValue);
         }
         let first = s.chars().next().unwrap();
-        if first == '#' || first == '.' || first.is_ascii_alphabetic() || first == '*' || first == '['
+        if first == '#'
+            || first == '.'
+            || first.is_ascii_alphabetic()
+            || first == '*'
+            || first == '['
         {
             Ok(Locator::Css(s.to_string()))
         } else {
@@ -63,7 +67,9 @@ impl Locator {
             Locator::Id(s) => Some(format!("#{}", escape_id_selector(s))),
             Locator::Class(s) => Some(format!(".{}", escape_class_selector(s))),
             Locator::Tag(s) => Some(s.clone()),
-            Locator::Attr(name, value) => Some(format!("[{}=\"{}\"]", name, escape_attr_value(value))),
+            Locator::Attr(name, value) => {
+                Some(format!("[{}=\"{}\"]", name, escape_attr_value(value)))
+            }
             Locator::XPath(_) | Locator::Text(_) => None,
         }
     }
@@ -111,7 +117,9 @@ fn escape_attr_value(s: &str) -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum LocatorParseError {
-    #[error("Missing locator prefix. Expected one of: css:, xpath:, text:, attr:, id:, class:, tag:")]
+    #[error(
+        "Missing locator prefix. Expected one of: css:, xpath:, text:, attr:, id:, class:, tag:"
+    )]
     MissingPrefix,
     #[error("Locator value is empty after the prefix")]
     EmptyValue,
@@ -159,7 +167,10 @@ mod tests {
         let loc = Locator::parse("xpath://div[@id='foo']").unwrap();
         assert!(matches!(loc, Locator::XPath(ref s) if s == "//div[@id='foo']"));
         assert!(loc.is_xpath());
-        assert_eq!(loc.to_xpath_expression().as_deref(), Some("//div[@id='foo']"));
+        assert_eq!(
+            loc.to_xpath_expression().as_deref(),
+            Some("//div[@id='foo']")
+        );
         assert!(loc.to_css_selector().is_none());
     }
 
@@ -213,7 +224,9 @@ mod tests {
     fn locator_parse_bare_css() {
         assert!(matches!(Locator::parse("#kw"), Ok(Locator::Css(s)) if s == "#kw"));
         assert!(matches!(Locator::parse(".btn"), Ok(Locator::Css(s)) if s == ".btn"));
-        assert!(matches!(Locator::parse("input[name=q]"), Ok(Locator::Css(s)) if s == "input[name=q]"));
+        assert!(
+            matches!(Locator::parse("input[name=q]"), Ok(Locator::Css(s)) if s == "input[name=q]")
+        );
     }
 
     #[test]

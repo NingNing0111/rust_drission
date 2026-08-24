@@ -48,14 +48,15 @@ fn demo_wait_element_appears(page: &ChromiumPage) -> Result<(), Box<dyn std::err
 
     // 等待 .item-list 出现在 DOM 中
     match page.wait(".item-list", Duration::from_secs(5)) {
-        Ok(el) => {
+        Ok(Some(el)) => {
             let items = el.elements("li")?;
             println!("  列表已加载，包含 {} 项", items.len());
             for (i, item) in items.iter().enumerate() {
                 println!("    [{}] {}", i, item.text().unwrap_or_default());
             }
         }
-        Err(e) => println!("  加载超时: {}", e),
+        Ok(None) => println!("  加载超时"),
+        Err(e) => println!("  等待失败: {}", e),
     }
 
     Ok(())
@@ -79,14 +80,14 @@ fn demo_wait_visible_for_modal(page: &ChromiumPage) -> Result<(), Box<dyn std::e
     page.get(&to_data_url(&html))?;
 
     // 点击按钮触发弹窗（延迟 300ms 模拟用户操作）
-    page.run_js(
-        "setTimeout(() => document.getElementById('trigger-btn').click(), 300)",
-    )?;
+    page.run_js("setTimeout(() => document.getElementById('trigger-btn').click(), 300)")?;
 
     // 等待弹窗可见
     match page.tab().wait_visible("#modal", Duration::from_secs(5)) {
         Ok(modal) => {
-            let text = modal.element(".modal-text")?.map(|e| e.text().unwrap_or_default());
+            let text = modal
+                .element(".modal-text")?
+                .map(|e| e.text().unwrap_or_default());
             println!("  弹窗已出现: {:?}", text);
         }
         Err(e) => println!("  弹窗未出现: {}", e),
@@ -125,7 +126,9 @@ fn demo_wait_hidden_for_spinner(page: &ChromiumPage) -> Result<(), Box<dyn std::
             let content_el = page.ele("#content")?;
             println!(
                 "  内容已显示: {}",
-                content_el.map(|e| e.text().unwrap_or_default()).unwrap_or_default()
+                content_el
+                    .map(|e| e.text().unwrap_or_default())
+                    .unwrap_or_default()
             );
         }
         Err(e) => println!("  spinner 超时未消失: {}", e),
@@ -159,27 +162,27 @@ fn demo_wait_with_different_locators(
     )?;
 
     // CSS class 定位
-    if let Ok(el) = page.wait(".action-btn", Duration::from_secs(5)) {
+    if let Ok(Some(el)) = page.wait(".action-btn", Duration::from_secs(5)) {
         println!("  CSS(.action-btn): {}", el.text().unwrap_or_default());
     }
 
     // ID 定位
-    if let Ok(el) = page.wait("id:my-btn", Duration::from_secs(5)) {
+    if let Ok(Some(el)) = page.wait("id:my-btn", Duration::from_secs(5)) {
         println!("  ID(my-btn): tag={}", el.tag().unwrap_or_default());
     }
 
     // Text 定位
-    if let Ok(el) = page.wait("text:提示", Duration::from_secs(5)) {
+    if let Ok(Some(el)) = page.wait("text:提示", Duration::from_secs(5)) {
         println!("  Text(提示): {}", el.text().unwrap_or_default());
     }
 
     // XPath 定位
-    if let Ok(el) = page.wait("xpath://span[@data-role='badge']", Duration::from_secs(5)) {
+    if let Ok(Some(el)) = page.wait("xpath://span[@data-role='badge']", Duration::from_secs(5)) {
         println!("  XPath(badge): {}", el.text().unwrap_or_default());
     }
 
     // Tag 定位
-    if let Ok(el) = page.wait("tag:button", Duration::from_secs(5)) {
+    if let Ok(Some(el)) = page.wait("tag:button", Duration::from_secs(5)) {
         println!("  Tag(button): {}", el.text().unwrap_or_default());
     }
 
@@ -207,9 +210,13 @@ fn demo_timeout_handling(page: &ChromiumPage) -> Result<(), Box<dyn std::error::
          }, 300)",
     )?;
     match page.wait("#critical", Duration::from_secs(10)) {
-        Ok(_) => println!("    关键元素就绪，继续流程"),
+        Ok(Some(_)) => println!("    关键元素就绪，继续流程"),
+        Ok(None) => {
+            println!("    关键元素缺失，中止");
+            return Err("关键元素等待超时".into());
+        }
         Err(e) => {
-            println!("    关键元素缺失，中止: {}", e);
+            println!("    等待失败，中止: {}", e);
             return Err(e.into());
         }
     }
@@ -217,8 +224,9 @@ fn demo_timeout_handling(page: &ChromiumPage) -> Result<(), Box<dyn std::error::
     // ── 策略 B: 非关键元素用短超时，超时则降级 ──
     println!("  [策略 B] 等待可选元素...");
     match page.wait("#optional-banner", Duration::from_secs(1)) {
-        Ok(el) => println!("    banner 已显示: {}", el.text().unwrap_or_default()),
-        Err(_) => println!("    banner 未出现，跳过（降级处理）"),
+        Ok(Some(el)) => println!("    banner 已显示: {}", el.text().unwrap_or_default()),
+        Ok(None) => println!("    banner 未出现，跳过（降级处理）"),
+        Err(e) => println!("    等待失败: {}", e),
     }
 
     // ── 策略 C: 使用 wait_element 快捷方法（默认 30s） ──
@@ -232,8 +240,9 @@ fn demo_timeout_handling(page: &ChromiumPage) -> Result<(), Box<dyn std::error::
          }, 200)",
     )?;
     match page.tab().wait_element("#quick-el") {
-        Ok(el) => println!("    元素出现: {}", el.text().unwrap_or_default()),
-        Err(e) => println!("    超时: {}", e),
+        Ok(Some(el)) => println!("    元素出现: {}", el.text().unwrap_or_default()),
+        Ok(None) => println!("    超时，元素未出现"),
+        Err(e) => println!("    等待失败: {}", e),
     }
 
     Ok(())

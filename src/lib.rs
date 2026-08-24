@@ -31,12 +31,12 @@ pub mod page;
 pub mod stealth;
 pub mod utils;
 
-pub use browser::{Browser, BrowserConfig, BrowserVersion};
-pub use cdp::CdpError;
+pub use browser::{AsyncBrowser, Browser, BrowserConfig, BrowserVersion};
+pub use cdp::{AsyncCdpClient, CdpError};
 pub use chromium_page::ChromiumPage;
 pub use element::Element;
 pub use frame::Frame;
-pub use listener::{DataPacket, Listener, Request, Response};
+pub use listener::{AsyncListener, DataPacket, Listener, Request, Response};
 pub use locator::{Locator, LocatorParseError};
-pub use page::{Cookie, Page};
+pub use page::{AsyncCdpExecutor, AsyncPage, Cookie, Page};
 pub use stealth::inject as stealth_inject;

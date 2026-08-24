@@ -1,9 +1,11 @@
 //! 页面（Tab）API：导航、DOM、元素、等待等
 
+mod async_page;
+
 use crate::cdp::{CdpClient, CdpError};
 use crate::dom::{
-    discard_search_results, get_backend_node_id, get_document_root, get_search_results, perform_search,
-    query_selector, query_selector_all_including_same_origin_frames,
+    discard_search_results, get_backend_node_id, get_document_root, get_search_results,
+    perform_search, query_selector, query_selector_all_including_same_origin_frames,
 };
 use crate::element::Element;
 use crate::frame::Frame;
@@ -12,6 +14,8 @@ use crate::locator::Locator;
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
+
+pub use async_page::{AsyncCdpExecutor, AsyncPage};
 
 /// Cookie 表示（README §19）
 #[derive(Debug, Clone)]
@@ -49,11 +53,8 @@ impl Page {
 
     /// 打开网址（导航到 url）。与 DrissionPage 一致也可用 [Page::get]。
     pub fn goto(&self, url: &str) -> Result<(), CdpError> {
-        self.client.send_with_session(
-            "Page.enable",
-            None,
-            Some(self.session_id.as_str()),
-        )?;
+        self.client
+            .send_with_session("Page.enable", None, Some(self.session_id.as_str()))?;
         let params = json!({ "url": url });
         let result = self.client.send_with_session(
             "Page.navigate",
@@ -84,7 +85,8 @@ impl Page {
 
     /// 刷新页面
     pub fn reload(&self) -> Result<(), CdpError> {
-        self.client.send_with_session("Page.reload", None, Some(self.session_id.as_str()))?;
+        self.client
+            .send_with_session("Page.reload", None, Some(self.session_id.as_str()))?;
         Ok(())
     }
 
@@ -103,7 +105,10 @@ impl Page {
                 code: -1,
                 message: "No navigation history is available".into(),
             })?;
-        let current = result.get("currentIndex").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let current = result
+            .get("currentIndex")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
         if current == 0 {
             return Ok(());
         }
@@ -117,7 +122,11 @@ impl Page {
                 message: "No previous page is available in the navigation history".into(),
             })?;
         let params = json!({ "entryId": entry_id });
-        self.client.send_with_session("Page.navigateToHistoryEntry", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Page.navigateToHistoryEntry",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
@@ -136,7 +145,10 @@ impl Page {
                 code: -1,
                 message: "No navigation history is available".into(),
             })?;
-        let current = result.get("currentIndex").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let current = result
+            .get("currentIndex")
+            .and_then(Value::as_u64)
+            .unwrap_or(0) as usize;
         if current + 1 >= entries.len() {
             return Ok(());
         }
@@ -150,7 +162,11 @@ impl Page {
                 message: "No next page is available in the navigation history".into(),
             })?;
         let params = json!({ "entryId": entry_id });
-        self.client.send_with_session("Page.navigateToHistoryEntry", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Page.navigateToHistoryEntry",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
@@ -191,11 +207,8 @@ impl Page {
 
     /// 执行 JS（可为 async），等待 Promise 解析后返回结果；适用于 fetch 等异步表达式
     pub fn run_js_await(&self, script: &str) -> Result<Value, CdpError> {
-        self.client.send_with_session(
-            "Runtime.enable",
-            None,
-            Some(self.session_id.as_str()),
-        )?;
+        self.client
+            .send_with_session("Runtime.enable", None, Some(self.session_id.as_str()))?;
         let params = json!({
             "expression": script,
             "returnByValue": true,
@@ -207,19 +220,13 @@ impl Page {
             Some(params),
             Some(self.session_id.as_str()),
         )?;
-        Ok(result
-            .get("result")
-            .cloned()
-            .unwrap_or(Value::Null))
+        Ok(result.get("result").cloned().unwrap_or(Value::Null))
     }
 
     /// 执行 JS，返回 Runtime.evaluate 的 result
     pub fn evaluate(&self, js: &str) -> Result<Value, CdpError> {
-        self.client.send_with_session(
-            "Runtime.enable",
-            None,
-            Some(self.session_id.as_str()),
-        )?;
+        self.client
+            .send_with_session("Runtime.enable", None, Some(self.session_id.as_str()))?;
         let params = json!({
             "expression": js,
             "returnByValue": true,
@@ -230,10 +237,7 @@ impl Page {
             Some(params),
             Some(self.session_id.as_str()),
         )?;
-        Ok(result
-            .get("result")
-            .cloned()
-            .unwrap_or(Value::Null))
+        Ok(result.get("result").cloned().unwrap_or(Value::Null))
     }
 
     /// 发送 CDP Input 鼠标事件（真实事件、isTrusted 为 true），用于滑块等仅响应真实用户操作的组件。
@@ -247,11 +251,8 @@ impl Page {
         button: Option<&str>,
         click_count: Option<u32>,
     ) -> Result<(), CdpError> {
-        self.client.send_with_session(
-            "Input.enable",
-            None,
-            Some(self.session_id.as_str()),
-        )?;
+        self.client
+            .send_with_session("Input.enable", None, Some(self.session_id.as_str()))?;
         let mut params = json!({
             "type": event_type,
             "x": x,
@@ -261,8 +262,11 @@ impl Page {
             params["button"] = json!(b);
             params["clickCount"] = json!(c);
         }
-        self.client
-            .send_with_session("Input.dispatchMouseEvent", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Input.dispatchMouseEvent",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
@@ -278,7 +282,8 @@ impl Page {
 
     /// 按定位器查单个元素（含 iframe 内；与 DrissionPage 一致使用 DOM.performSearch）
     pub fn element(&self, locator: &str) -> Result<Option<Element>, CdpError> {
-        self._element_inner(locator).map_err(|e| e.with_context(locator))
+        self._element_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     /// element 内部实现
@@ -286,7 +291,10 @@ impl Page {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         // CSS 查询优先走 Runtime.querySelectorAll(主文档+同源 iframe)，直接拿 objectId，降低动态 DOM 下 nodeId 失效概率。
         if let Some(selector) = loc.to_css_selector() {
@@ -308,7 +316,8 @@ impl Page {
             // 同源 iframe 扫描无结果时，回退到主文档 root 下 DOM.querySelector（兼容极端场景）。
             // 回退失败不应导致查找报错，因为主扫描已正确返回无结果。
             if let Ok(root) = get_document_root(&self.client, &self.session_id) {
-                if let Ok(Some(id)) = query_selector(&self.client, &self.session_id, root, &selector)
+                if let Ok(Some(id)) =
+                    query_selector(&self.client, &self.session_id, root, &selector)
                 {
                     let b = get_backend_node_id(&self.client, &self.session_id, id).ok();
                     return Ok(Some(Element::new_with_backend(
@@ -346,11 +355,22 @@ impl Page {
                 "expression": format!("document.evaluate({}, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue", xpath_escaped),
                 "returnByValue": false
             });
-            let result = self.client.send_with_session("Runtime.evaluate", Some(params), Some(self.session_id.as_str()))?;
-            let obj_id = result.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+            let result = self.client.send_with_session(
+                "Runtime.evaluate",
+                Some(params),
+                Some(self.session_id.as_str()),
+            )?;
+            let obj_id = result
+                .get("result")
+                .and_then(|r| r.get("objectId"))
+                .and_then(Value::as_str);
             if let Some(oid) = obj_id {
                 let params = json!({ "objectId": oid });
-                let res = self.client.send_with_session("DOM.requestNode", Some(params), Some(self.session_id.as_str()))?;
+                let res = self.client.send_with_session(
+                    "DOM.requestNode",
+                    Some(params),
+                    Some(self.session_id.as_str()),
+                )?;
                 if let Some(nid) = res.get("nodeId").and_then(Value::as_i64) {
                     let b = get_backend_node_id(&self.client, &self.session_id, nid).ok();
                     return Ok(Some(Element::new_with_object_id(
@@ -370,7 +390,8 @@ impl Page {
 
     /// 按定位器查多个元素（含 iframe 内；与 DrissionPage 一致使用 DOM.performSearch）
     pub fn elements(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
-        self._elements_inner(locator).map_err(|e| e.with_context(locator))
+        self._elements_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     /// elements 内部实现
@@ -378,7 +399,10 @@ impl Page {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         // CSS 查询优先走 Runtime.querySelectorAll(主文档+同源 iframe)，返回 nodeId+objectId 组合。
         if let Some(selector) = loc.to_css_selector() {
@@ -440,20 +464,46 @@ impl Page {
                 xpath_escaped
             );
             let params = json!({ "expression": expr, "returnByValue": false });
-            let result = self.client.send_with_session("Runtime.evaluate", Some(params), Some(self.session_id.as_str()))?;
-            let obj_id = result.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+            let result = self.client.send_with_session(
+                "Runtime.evaluate",
+                Some(params),
+                Some(self.session_id.as_str()),
+            )?;
+            let obj_id = result
+                .get("result")
+                .and_then(|r| r.get("objectId"))
+                .and_then(Value::as_str);
             let mut node_ids = Vec::new();
             if let Some(oid) = obj_id {
                 let params = json!({ "functionDeclaration": "function(){ return this.length; }", "objectId": oid });
-                let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                let len = res.get("result").and_then(|r| r.get("value")).and_then(Value::as_u64).unwrap_or(0) as usize;
+                let res = self.client.send_with_session(
+                    "Runtime.callFunctionOn",
+                    Some(params),
+                    Some(self.session_id.as_str()),
+                )?;
+                let len = res
+                    .get("result")
+                    .and_then(|r| r.get("value"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as usize;
                 for i in 0..len {
                     let params = json!({ "functionDeclaration": "function(i){ return this[i]; }", "objectId": oid, "arguments": [{"value": i}] });
-                    let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                    let eid = res.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+                    let res = self.client.send_with_session(
+                        "Runtime.callFunctionOn",
+                        Some(params),
+                        Some(self.session_id.as_str()),
+                    )?;
+                    let eid = res
+                        .get("result")
+                        .and_then(|r| r.get("objectId"))
+                        .and_then(Value::as_str);
                     if let Some(eid) = eid {
                         let params = json!({ "objectId": eid });
-                        let node_res = self.client.send_with_session("DOM.requestNode", Some(params), Some(self.session_id.as_str()))?;
+                        let node_res = self.client.send_with_session(
+                            "DOM.requestNode",
+                            Some(params),
+                            Some(self.session_id.as_str()),
+                        )?;
                         if let Some(nid) = node_res.get("nodeId").and_then(Value::as_i64) {
                             node_ids.push(nid);
                         }
@@ -507,53 +557,54 @@ impl Page {
 
     /// 点击定位器匹配的第一个元素
     pub fn click(&self, locator: &str) -> Result<(), CdpError> {
-        let el = self
-            .element(locator)?
-            .ok_or_else(|| CdpError::Protocol {
-                id: None,
-                code: -1,
-                message: format!("Element not found for locator: {}", locator),
-            })?;
+        let el = self.element(locator)?.ok_or_else(|| CdpError::Protocol {
+            id: None,
+            code: -1,
+            message: format!("Element not found for locator: {}", locator),
+        })?;
         el.click()
     }
 
     /// 向定位器匹配的第一个元素输入文本
     pub fn input(&self, locator: &str, text: &str) -> Result<(), CdpError> {
-        let el = self
-            .element(locator)?
-            .ok_or_else(|| CdpError::Protocol {
-                id: None,
-                code: -1,
-                message: format!("Element not found for locator: {}", locator),
-            })?;
+        let el = self.element(locator)?.ok_or_else(|| CdpError::Protocol {
+            id: None,
+            code: -1,
+            message: format!("Element not found for locator: {}", locator),
+        })?;
         el.input(text)
     }
 
-    /// 等待定位器匹配到元素，超时返回 Err
+    /// 等待定位器匹配到元素，超时返回 Ok(None)
     /// 等待定位器匹配到元素（DOM 存在）
-    pub fn wait(&self, locator: &str, timeout: Duration) -> Result<Element, CdpError> {
+    pub fn wait(&self, locator: &str, timeout: Duration) -> Result<Option<Element>, CdpError> {
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
             if let Some(el) = self.element(locator)? {
-                return Ok(el);
+                return Ok(Some(el));
             }
             std::thread::sleep(Duration::from_millis(200));
         }
-        Err(CdpError::Protocol {
-            id: None,
-            code: -1,
-            message: format!("Timed out while waiting for element: {}", locator),
-        })
+        Ok(None)
     }
 
     /// 等待定位器匹配到元素（默认 30 秒）
-    pub fn wait_element(&self, locator: &str) -> Result<Element, CdpError> {
+    pub fn wait_element(&self, locator: &str) -> Result<Option<Element>, CdpError> {
         self.wait(locator, Duration::from_secs(30))
     }
 
     /// 等待元素可见（存在且 is_displayed）
     pub fn wait_visible(&self, locator: &str, timeout: Duration) -> Result<Element, CdpError> {
-        let el = self.wait(locator, timeout)?;
+        let el = self
+            .wait(locator, timeout)?
+            .ok_or_else(|| CdpError::Protocol {
+                id: None,
+                code: -1,
+                message: format!(
+                    "Timed out while waiting for element to become visible: {}",
+                    locator
+                ),
+            })?;
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
             if el.is_displayed().unwrap_or(false) {
@@ -569,7 +620,10 @@ impl Page {
         Err(CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Timed out while waiting for element to become visible: {}", locator),
+            message: format!(
+                "Timed out while waiting for element to become visible: {}",
+                locator
+            ),
         })
     }
 
@@ -590,25 +644,34 @@ impl Page {
         Err(CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Timed out while waiting for element to become hidden: {}", locator),
+            message: format!(
+                "Timed out while waiting for element to become hidden: {}",
+                locator
+            ),
         })
     }
 
     /// 等待网络空闲（简化实现：固定等待）
     pub fn wait_network_idle(&self) -> Result<(), CdpError> {
-        self.client.send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
+        self.client
+            .send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
         std::thread::sleep(Duration::from_millis(500));
         Ok(())
     }
 
     /// 获取当前页面 URL 下的 cookies（可选传入 urls 过滤）
     pub fn cookies(&self, urls: Option<&[String]>) -> Result<Vec<Cookie>, CdpError> {
-        self.client.send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
+        self.client
+            .send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
         let params = match urls {
             Some(u) => json!({ "urls": u }),
             None => json!({}),
         };
-        let result = self.client.send_with_session("Network.getCookies", Some(params), Some(self.session_id.as_str()))?;
+        let result = self.client.send_with_session(
+            "Network.getCookies",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         let list = result
             .get("cookies")
             .and_then(Value::as_array)
@@ -624,7 +687,12 @@ impl Page {
                 let value = c.get("value")?.as_str()?.to_string();
                 let domain = c.get("domain").and_then(Value::as_str).map(String::from);
                 let path = c.get("path").and_then(Value::as_str).map(String::from);
-                Some(Cookie { name, value, domain, path })
+                Some(Cookie {
+                    name,
+                    value,
+                    domain,
+                    path,
+                })
             })
             .collect();
         Ok(cookies)
@@ -632,7 +700,8 @@ impl Page {
 
     /// 设置 cookie（url 建议传入当前页 URL 以确定 domain/path）
     pub fn set_cookie(&self, cookie: &Cookie, url: Option<&str>) -> Result<(), CdpError> {
-        self.client.send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
+        self.client
+            .send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
         let mut params = json!({ "name": cookie.name, "value": cookie.value });
         if let Some(u) = url {
             params["url"] = json!(u);
@@ -643,19 +712,28 @@ impl Page {
         if let Some(ref p) = cookie.path {
             params["path"] = json!(p);
         }
-        self.client.send_with_session("Network.setCookie", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Network.setCookie",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
     /// 删除指定 name 的 cookie（可选 url 限定）
     pub fn delete_cookie(&self, name: &str, url: Option<&str>) -> Result<(), CdpError> {
-        self.client.send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
+        self.client
+            .send_with_session("Network.enable", None, Some(self.session_id.as_str()))?;
         let params = if let Some(u) = url {
             json!({ "name": name, "url": u })
         } else {
             json!({ "name": name })
         };
-        self.client.send_with_session("Network.deleteCookies", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Network.deleteCookies",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
@@ -666,22 +744,21 @@ impl Page {
             Some(json!({ "format": "png" })),
             Some(self.session_id.as_str()),
         )?;
-        let data_b64 = result
-            .get("data")
-            .and_then(Value::as_str)
-            .ok_or_else(|| CdpError::Protocol {
+        let data_b64 =
+            result
+                .get("data")
+                .and_then(Value::as_str)
+                .ok_or_else(|| CdpError::Protocol {
+                    id: None,
+                    code: -1,
+                    message: "Page.captureScreenshot did not return image data".into(),
+                })?;
+        let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data_b64)
+            .map_err(|e| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Page.captureScreenshot did not return image data".into(),
+                message: format!("Failed to decode base64 data: {}", e),
             })?;
-        let data = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            data_b64,
-        ).map_err(|e| CdpError::Protocol {
-            id: None,
-            code: -1,
-            message: format!("Failed to decode base64 data: {}", e),
-        })?;
         std::fs::write(path, data).map_err(|e| CdpError::Protocol {
             id: None,
             code: -1,
@@ -720,7 +797,10 @@ impl Page {
     /// 启动监听并按资源类型过滤（如 "XHR", "Fetch", "Document", "Script" 等）。
     pub fn listen_resource_type(&self, resource_type: &str) -> Result<Listener, CdpError> {
         let listener = self.listen()?;
-        Ok(Listener::filter_resource_type(listener, resource_type.to_string()))
+        Ok(Listener::filter_resource_type(
+            listener,
+            resource_type.to_string(),
+        ))
     }
 
     /// 当前 Tab 的 target ID（与 DrissionPage `tab_id` 一致）
@@ -752,7 +832,10 @@ impl Page {
 
     /// 页面滚动到指定坐标（与 DrissionPage `scroll(x, y)` 一致）
     pub fn scroll(&self, x: i64, y: i64) -> Result<(), CdpError> {
-        let script = format!("window.scrollTo({}, {}); window.scrollX; window.scrollY;", x, y);
+        let script = format!(
+            "window.scrollTo({}, {}); window.scrollX; window.scrollY;",
+            x, y
+        );
         self.evaluate(&script)?;
         Ok(())
     }
@@ -788,11 +871,8 @@ impl Page {
 
     /// 停止页面加载（与 DrissionPage `stop_loading()` 一致）
     pub fn stop_loading(&self) -> Result<(), CdpError> {
-        self.client.send_with_session(
-            "Page.stopLoading",
-            None,
-            Some(self.session_id.as_str()),
-        )?;
+        self.client
+            .send_with_session("Page.stopLoading", None, Some(self.session_id.as_str()))?;
         Ok(())
     }
 
@@ -815,7 +895,12 @@ impl Page {
     /// `accept` - 是否接受
     /// `prompt_text` - prompt 输入文本（可选）
     /// `timeout` - 超时时间
-    pub fn wait_alert(&self, accept: bool, prompt_text: Option<&str>, timeout: Duration) -> Result<bool, CdpError> {
+    pub fn wait_alert(
+        &self,
+        accept: bool,
+        prompt_text: Option<&str>,
+        timeout: Duration,
+    ) -> Result<bool, CdpError> {
         let deadline = std::time::Instant::now() + timeout;
         // 轮询直到弹窗出现或超时
         loop {
@@ -846,7 +931,10 @@ impl Page {
             None => "JSON.stringify(Object.keys(sessionStorage).reduce((acc,k) => {{ acc[k] = sessionStorage.getItem(k); return acc; }}, {{}}));".to_string(),
         };
         let result = self.evaluate(&script)?;
-        let s = result.get("value").and_then(Value::as_str).unwrap_or("null");
+        let s = result
+            .get("value")
+            .and_then(Value::as_str)
+            .unwrap_or("null");
         if s == "null" {
             Ok(None)
         } else {
@@ -879,7 +967,10 @@ impl Page {
             None => "JSON.stringify(Object.keys(localStorage).reduce((acc,k) => {{ acc[k] = localStorage.getItem(k); return acc; }}, {{}}));".to_string(),
         };
         let result = self.evaluate(&script)?;
-        let s = result.get("value").and_then(Value::as_str).unwrap_or("null");
+        let s = result
+            .get("value")
+            .and_then(Value::as_str)
+            .unwrap_or("null");
         if s == "null" {
             Ok(None)
         } else {
@@ -942,7 +1033,8 @@ impl Page {
 
     /// 直接发送 CDP 命令并返回结果（与 DrissionPage `run_cdp` 一致）
     pub fn run_cdp(&self, method: &str, params: Option<Value>) -> Result<Value, CdpError> {
-        self.client.send_with_session(method, params, Some(self.session_id.as_str()))
+        self.client
+            .send_with_session(method, params, Some(self.session_id.as_str()))
     }
 }
 

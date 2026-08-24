@@ -1,6 +1,6 @@
 //! CDP WebSocket 客户端：连接、发送命令、接收响应
 
-use serde::{Deserialize, Serialize};
+use super::protocol::{CdpCommand, CdpMessage};
 use serde_json::Value;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Mutex;
@@ -18,9 +18,21 @@ pub enum CdpError {
     #[error("Failed to receive message: {0}")]
     Recv(String),
     #[error("CDP error: id={id:?}, code={code}, message={message}")]
-    Protocol { id: Option<i64>, code: i64, message: String },
+    Protocol {
+        id: Option<i64>,
+        code: i64,
+        message: String,
+    },
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("Operation timed out: {0}")]
+    Timeout(String),
+    #[error("Channel closed: {0}")]
+    ChannelClosed(String),
+    #[error("WebSocket error: {0}")]
+    WebSocket(String),
+    #[error("HTTP status error: status={status}, body={body}")]
+    HttpStatus { status: u16, body: String },
 }
 
 impl CdpError {
@@ -37,42 +49,11 @@ impl CdpError {
     }
 }
 
-/// CDP 命令请求（发送格式，字段名须为 CDP 规定的 id/method/sessionId/params）
-#[derive(Debug, Serialize)]
-struct CdpCommand {
-    id: i64,
-    method: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    params: Option<Value>,
-    #[serde(skip_serializing_if = "Option::is_none", rename = "sessionId")]
-    session_id: Option<String>,
-}
-
-/// CDP 响应（含 result 或 error；method/params 为事件用）
-#[derive(Debug, Deserialize)]
-struct CdpResponse {
-    id: Option<i64>,
-    #[serde(default)]
-    result: Option<Value>,
-    #[serde(default)]
-    error: Option<CdpErrorBody>,
-    #[serde(default)]
-    #[allow(dead_code)]
-    method: Option<String>,
-    #[serde(default)]
-    #[allow(dead_code)]
-    params: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CdpErrorBody {
-    code: i64,
-    message: String,
-}
-
 /// CDP WebSocket 客户端（同步、单连接）
 pub struct CdpClient {
-    stream: Mutex<tungstenite::protocol::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>>,
+    stream: Mutex<
+        tungstenite::protocol::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
+    >,
     next_id: AtomicI64,
 }
 
@@ -137,15 +118,13 @@ impl CdpClient {
             .lock()
             .map_err(|e| CdpError::Recv(e.to_string()))?;
         loop {
-            let msg = guard
-                .read()
-                .map_err(|e| CdpError::Recv(e.to_string()))?;
+            let msg = guard.read().map_err(|e| CdpError::Recv(e.to_string()))?;
             let text = match msg {
                 Message::Text(t) => t,
                 Message::Close(_) => return Err(CdpError::Recv("Connection closed".into())),
                 _ => continue,
             };
-            let resp: CdpResponse = serde_json::from_str(&text).map_err(CdpError::Json)?;
+            let resp: CdpMessage = serde_json::from_str(&text).map_err(CdpError::Json)?;
             if resp.id == Some(expect_id) {
                 if let Some(e) = resp.error {
                     return Err(CdpError::Protocol {
@@ -154,13 +133,11 @@ impl CdpClient {
                         message: e.message,
                     });
                 }
-                return resp
-                    .result
-                    .ok_or_else(|| CdpError::Protocol {
-                        id: Some(expect_id),
-                        code: -1,
-                        message: "CDP response did not include a result payload".into(),
-                    });
+                return resp.result.ok_or_else(|| CdpError::Protocol {
+                    id: Some(expect_id),
+                    code: -1,
+                    message: "CDP response did not include a result payload".into(),
+                });
             }
             // 否则是 event，继续读
         }

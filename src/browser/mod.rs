@@ -1,5 +1,6 @@
 //! 浏览器连接与 Tab 管理
 
+mod async_browser;
 mod config;
 
 use crate::cdp::{CdpClient, CdpError};
@@ -9,6 +10,7 @@ use serde_json::json;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 
+pub use async_browser::AsyncBrowser;
 pub use config::BrowserConfig;
 
 /// 浏览器版本信息（来自 /json/version）
@@ -127,7 +129,10 @@ impl Browser {
             })?;
         let mut pages = Vec::new();
         for info in list {
-            let typ = info.get("type").and_then(serde_json::Value::as_str).unwrap_or("");
+            let typ = info
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
             if typ != "page" {
                 continue;
             }
@@ -175,7 +180,11 @@ impl Browser {
         let ids: Vec<String> = list
             .iter()
             .filter(|info| info.get("type").and_then(serde_json::Value::as_str) == Some("page"))
-            .filter_map(|info| info.get("targetId").and_then(serde_json::Value::as_str).map(String::from))
+            .filter_map(|info| {
+                info.get("targetId")
+                    .and_then(serde_json::Value::as_str)
+                    .map(String::from)
+            })
             .collect();
         Ok(ids)
     }
@@ -201,7 +210,13 @@ impl Browser {
     /// `title` - 可选，标题模糊匹配
     /// `url` - 可选，URL 模糊匹配
     /// `tab_type` - 可选，Tab 类型（如 "page"）
-    pub fn get_tab(&self, id_or_num: &str, title: Option<&str>, url: Option<&str>, tab_type: Option<&str>) -> Result<Option<Page>, CdpError> {
+    pub fn get_tab(
+        &self,
+        id_or_num: &str,
+        title: Option<&str>,
+        url: Option<&str>,
+        tab_type: Option<&str>,
+    ) -> Result<Option<Page>, CdpError> {
         let tabs = self.tabs()?;
         // 如果是数字，视为 1-based 序号
         if let Ok(num) = id_or_num.parse::<usize>() {
@@ -216,12 +231,20 @@ impl Browser {
                 return Ok(Some(tab));
             }
             // 按标题/URL 模糊匹配
-            let matches_title = title.map(|t| {
-                tab.title().map(|tab_title| tab_title.contains(t)).unwrap_or(false)
-            }).unwrap_or(true);
-            let matches_url = url.map(|u| {
-                tab.url().map(|tab_url| tab_url.contains(u)).unwrap_or(false)
-            }).unwrap_or(true);
+            let matches_title = title
+                .map(|t| {
+                    tab.title()
+                        .map(|tab_title| tab_title.contains(t))
+                        .unwrap_or(false)
+                })
+                .unwrap_or(true);
+            let matches_url = url
+                .map(|u| {
+                    tab.url()
+                        .map(|tab_url| tab_url.contains(u))
+                        .unwrap_or(false)
+                })
+                .unwrap_or(true);
             let matches_type = tab_type.map(|tp| tp == "page").unwrap_or(true);
             if matches_title && matches_url && matches_type {
                 return Ok(Some(tab));
@@ -231,16 +254,21 @@ impl Browser {
     }
 
     /// 按条件筛选 Tab 列表（与 DrissionPage `get_tabs` 一致）
-    pub fn get_tabs(&self, title: Option<&str>, url: Option<&str>, tab_type: Option<&str>) -> Result<Vec<Page>, CdpError> {
+    pub fn get_tabs(
+        &self,
+        title: Option<&str>,
+        url: Option<&str>,
+        tab_type: Option<&str>,
+    ) -> Result<Vec<Page>, CdpError> {
         let tabs = self.tabs()?;
         let mut result = Vec::new();
         for tab in tabs {
-            let matches_title = title.map(|t| {
-                tab.title().map(|title| title.contains(t)).unwrap_or(false)
-            }).unwrap_or(true);
-            let matches_url = url.map(|u| {
-                tab.url().map(|url| url.contains(u)).unwrap_or(false)
-            }).unwrap_or(true);
+            let matches_title = title
+                .map(|t| tab.title().map(|title| title.contains(t)).unwrap_or(false))
+                .unwrap_or(true);
+            let matches_url = url
+                .map(|u| tab.url().map(|url| url.contains(u)).unwrap_or(false))
+                .unwrap_or(true);
             let matches_type = tab_type.map(|tp| tp == "page").unwrap_or(true);
             if matches_title && matches_url && matches_type {
                 result.push(tab);
@@ -262,7 +290,10 @@ impl Browser {
     pub fn close_tabs(&self, tab_ids: &[String], others: bool) -> Result<(), CdpError> {
         let all_ids = self.tab_ids()?;
         let to_close: Vec<String> = if others {
-            all_ids.into_iter().filter(|id| !tab_ids.contains(id)).collect()
+            all_ids
+                .into_iter()
+                .filter(|id| !tab_ids.contains(id))
+                .collect()
         } else {
             tab_ids.to_vec()
         };
@@ -299,7 +330,7 @@ impl Browser {
 }
 
 /// 将 "127.0.0.1:9222" 规范为 "http://127.0.0.1:9222"
-fn normalize_endpoint(endpoint: &str) -> String {
+pub(crate) fn normalize_endpoint(endpoint: &str) -> String {
     let s = endpoint.trim();
     if s.is_empty() {
         return "http://127.0.0.1:9222".to_string();
@@ -328,24 +359,25 @@ pub(crate) fn fetch_ws_url_from_endpoint(endpoint: &str) -> Result<String, CdpEr
         .into_string()
         .map_err(|e| CdpError::Http(e.to_string()))?;
     let v: JsonVersion = serde_json::from_str(&body).map_err(CdpError::Json)?;
-    v.web_socket_debugger_url
-        .ok_or_else(|| CdpError::Http("The /json/version response did not include webSocketDebuggerUrl".into()))
+    v.web_socket_debugger_url.ok_or_else(|| {
+        CdpError::Http("The /json/version response did not include webSocketDebuggerUrl".into())
+    })
 }
 
 #[derive(Deserialize)]
-struct JsonVersion {
+pub(crate) struct JsonVersion {
     #[serde(rename = "Browser")]
-    browser: Option<String>,
+    pub(crate) browser: Option<String>,
     #[serde(rename = "Protocol-Version")]
-    protocol_version: Option<String>,
+    pub(crate) protocol_version: Option<String>,
     #[serde(rename = "User-Agent")]
-    user_agent: Option<String>,
+    pub(crate) user_agent: Option<String>,
     #[serde(rename = "webSocketDebuggerUrl")]
-    web_socket_debugger_url: Option<String>,
+    pub(crate) web_socket_debugger_url: Option<String>,
 }
 
 /// 启动 Chrome 进程，返回 (http_endpoint, child)。行为对齐 DrissionPage browser._run_browser + get_launch_args
-fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
+pub(crate) fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
     let port = config.get_remote_debugging_port();
     let host = config
         .get_address()
@@ -375,7 +407,10 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
                 .map(std::path::Path::new)
                 .map(|p| p.to_path_buf())
                 .unwrap_or_else(std::env::temp_dir);
-            let dir = tmp.join("DrissionPage").join("userData").join(port.to_string());
+            let dir = tmp
+                .join("DrissionPage")
+                .join("userData")
+                .join(port.to_string());
             if let Some(p) = dir.to_str() {
                 if let Err(e) = std::fs::create_dir_all(&dir) {
                     return Err(CdpError::Http(format!(
@@ -385,7 +420,9 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
                 }
                 p.to_string()
             } else {
-                return Err(CdpError::Http("Failed to build the default user-data-dir path".into()));
+                return Err(CdpError::Http(
+                    "Failed to build the default user-data-dir path".into(),
+                ));
             }
         }
     };
@@ -399,7 +436,10 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
 
     args.push("--window-size=1920,1080".to_string());
     if config.get_headless() {
-        let has_headless = config.get_args().iter().any(|a| a.starts_with("--headless"));
+        let has_headless = config
+            .get_args()
+            .iter()
+            .any(|a| a.starts_with("--headless"));
         if !has_headless {
             args.push("--headless=new".to_string());
         }
@@ -416,12 +456,17 @@ fn launch_chrome(config: &BrowserConfig) -> Result<(String, Child), CdpError> {
 
     for _ in 0..50 {
         std::thread::sleep(std::time::Duration::from_millis(100));
-        if ureq::get(&format!("{}/json/version", endpoint)).call().is_ok() {
+        if ureq::get(&format!("{}/json/version", endpoint))
+            .call()
+            .is_ok()
+        {
             return Ok((endpoint, child));
         }
     }
     let _ = child.kill();
-    Err(CdpError::Http("Chrome did not become ready within 5 seconds after launch".into()))
+    Err(CdpError::Http(
+        "Chrome did not become ready within 5 seconds after launch".into(),
+    ))
 }
 
 /// 解析 Chrome 可执行路径：配置 > 目录+chrome(.exe) > 自动查找

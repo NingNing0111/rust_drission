@@ -149,6 +149,41 @@ tab.wait_network_idle()?;
 tab.set_local_storage("token", "demo-value")?;
 ```
 
+### Async CDP API
+
+同步 API 仍然是推荐入口；当你需要并发 CDP 命令、共享事件总线、异步网络监听或更精确的 network idle 等待时，可以使用新增的 async 类型。异步路径基于 `tokio-tungstenite`、`tokio::mpsc`、`tokio::oneshot`、`tokio::broadcast`、`dashmap` 和 `reqwest`，库本身只发出 `tracing` 事件，不会初始化 subscriber。
+
+```rust
+use rust_drission::{AsyncBrowser, CdpError};
+use std::time::Duration;
+
+#[tokio::main]
+async fn main() -> Result<(), CdpError> {
+    // Chrome must already be started with --remote-debugging-port=9222.
+    let browser = AsyncBrowser::connect("127.0.0.1:9222").await?;
+    let page = browser.new_tab().await?;
+
+    page.get("https://example.com").await?;
+    println!("title = {}", page.title().await?);
+
+    let mut listener = page.listen_url("example").await?;
+    page.reload().await?;
+    if let Some(pkt) = listener.wait(Duration::from_secs(5)).await? {
+        println!("{} {}", pkt.request.method, pkt.request.url);
+    }
+
+    page.wait_network_idle_for(Duration::from_millis(500), Duration::from_secs(10)).await?;
+    page.close().await?;
+    Ok(())
+}
+```
+
+See also:
+
+- `examples/async_page_basics.rs`
+- `examples/async_network_listen.rs`
+- `examples/async_wait_network_idle.rs`
+
 ## Documentation
 
 - Chinese guide: [docs/usage.zh-CN.md](docs/usage.zh-CN.md)

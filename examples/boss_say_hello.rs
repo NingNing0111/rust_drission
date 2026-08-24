@@ -19,7 +19,12 @@ fn main() -> Result<(), CdpError> {
 
     let card_selector = "#recommend-list .card-item";
 
-    page.wait(card_selector, Duration::from_secs(30))?;
+    page.wait(card_selector, Duration::from_secs(30))?
+        .ok_or_else(|| CdpError::Protocol {
+            id: None,
+            code: -1,
+            message: format!("Timed out while waiting for element: {}", card_selector),
+        })?;
 
     // 滚动
     const RECOMMEND_FRAME_LOCATOR: &str = "css:iframe[name=recommendFrame]";

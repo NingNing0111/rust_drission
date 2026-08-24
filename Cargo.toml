@@ -1,6 +1,6 @@
 [package]
 name = "rust_drission"
-version = "0.2.5"
+version = "0.2.7"
 edition = "2021"
 description = "Browser automation library for Rust via Chrome DevTools Protocol (CDP). Connect or launch Chrome, control pages/elements, run JS, cookies, screenshots, request/response listening. API inspired by DrissionPage."
 readme = "README.md"
@@ -29,6 +29,13 @@ serde_json = "1"
 thiserror = "1"
 url = "2"
 base64 = "0.21"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process"] }
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+dashmap = "5"
+tracing = "0.1"
+async-trait = "0.1"
 
 [dev-dependencies]
 serde_json = "1"
@@ -78,3 +85,19 @@ path = "examples/test_page_wait.rs"
 [[example]]
 name = "page_wait_demo"
 path = "examples/page_wait_demo.rs"
+
+[[example]]
+name = "async_page_basics"
+path = "examples/async_page_basics.rs"
+
+[[example]]
+name = "async_network_listen"
+path = "examples/async_network_listen.rs"
+
+[[example]]
+name = "async_wait_network_idle"
+path = "examples/async_wait_network_idle.rs"
+
+[[example]]
+name = "async_parallel_tabs"
+path = "examples/async_parallel_tabs.rs"

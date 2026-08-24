@@ -79,7 +79,8 @@ impl Frame {
 
     /// 在本 frame 内按定位器查单个元素（与 DrissionPage 在 ChromiumFrame 上 ele() 一致）
     pub fn ele(&self, locator: &str) -> Result<Option<Element>, CdpError> {
-        self._ele_inner(locator).map_err(|e| e.with_context(locator))
+        self._ele_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     /// ele 内部实现
@@ -87,7 +88,10 @@ impl Frame {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         let do_ele = |root: i64| -> Result<Option<Element>, CdpError> {
             if let Some(selector) = loc.to_css_selector() {
@@ -144,7 +148,8 @@ impl Frame {
 
     /// 在本 frame 内按定位器查多个元素（与 DrissionPage 在 ChromiumFrame 上 eles() 一致）
     pub fn eles(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
-        self._eles_inner(locator).map_err(|e| e.with_context(locator))
+        self._eles_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     /// eles 内部实现
@@ -152,7 +157,10 @@ impl Frame {
         let loc = Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         let do_eles = |root: i64| -> Result<Vec<Element>, CdpError> {
             if let Some(selector) = loc.to_css_selector() {
@@ -177,83 +185,81 @@ impl Frame {
             }
             if let Some(xpath) = loc.to_xpath_expression() {
                 let doc_oid = resolve_node_to_object_id(&self.client, &self.session_id, root)?;
-            let expr = format!(
-                "function(xpath){{ var r = this.evaluate(xpath, this, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null); var a = []; for(var i = 0; i < r.snapshotLength; i++) a.push(r.snapshotItem(i)); return a; }}"
-            );
-            let params = json!({
-                "functionDeclaration": expr,
-                "objectId": doc_oid,
-                "arguments": [{"value": xpath}]
-            });
-            let result = self.client.send_with_session(
-                "Runtime.callFunctionOn",
-                Some(params),
-                Some(self.session_id.as_str()),
-            )?;
-            let obj_id = result
-                .get("result")
-                .and_then(|r| r.get("objectId"))
-                .and_then(Value::as_str);
-            let mut node_ids = Vec::new();
-            if let Some(oid) = obj_id {
+                let expr = "function(xpath){ var r = this.evaluate(xpath, this, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null); var a = []; for(var i = 0; i < r.snapshotLength; i++) a.push(r.snapshotItem(i)); return a; }".to_string();
                 let params = json!({
-                    "functionDeclaration": "function(){ return this.length; }",
-                    "objectId": oid
+                    "functionDeclaration": expr,
+                    "objectId": doc_oid,
+                    "arguments": [{"value": xpath}]
                 });
-                let res = self.client.send_with_session(
+                let result = self.client.send_with_session(
                     "Runtime.callFunctionOn",
                     Some(params),
                     Some(self.session_id.as_str()),
                 )?;
-                let len = res
+                let obj_id = result
                     .get("result")
-                    .and_then(|r| r.get("value"))
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0) as usize;
-                for i in 0..len {
+                    .and_then(|r| r.get("objectId"))
+                    .and_then(Value::as_str);
+                let mut node_ids = Vec::new();
+                if let Some(oid) = obj_id {
                     let params = json!({
-                        "functionDeclaration": "function(i){ return this[i]; }",
-                        "objectId": oid,
-                        "arguments": [{"value": i}]
+                        "functionDeclaration": "function(){ return this.length; }",
+                        "objectId": oid
                     });
                     let res = self.client.send_with_session(
                         "Runtime.callFunctionOn",
                         Some(params),
                         Some(self.session_id.as_str()),
                     )?;
-                    let eid = res
+                    let len = res
                         .get("result")
-                        .and_then(|r| r.get("objectId"))
-                        .and_then(Value::as_str);
-                    if let Some(eid) = eid {
-                        let params = json!({ "objectId": eid });
-                        let node_res = self.client.send_with_session(
-                            "DOM.requestNode",
+                        .and_then(|r| r.get("value"))
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0) as usize;
+                    for i in 0..len {
+                        let params = json!({
+                            "functionDeclaration": "function(i){ return this[i]; }",
+                            "objectId": oid,
+                            "arguments": [{"value": i}]
+                        });
+                        let res = self.client.send_with_session(
+                            "Runtime.callFunctionOn",
                             Some(params),
                             Some(self.session_id.as_str()),
                         )?;
-                        if let Some(nid) = node_res.get("nodeId").and_then(Value::as_i64) {
-                            node_ids.push(nid);
+                        let eid = res
+                            .get("result")
+                            .and_then(|r| r.get("objectId"))
+                            .and_then(Value::as_str);
+                        if let Some(eid) = eid {
+                            let params = json!({ "objectId": eid });
+                            let node_res = self.client.send_with_session(
+                                "DOM.requestNode",
+                                Some(params),
+                                Some(self.session_id.as_str()),
+                            )?;
+                            if let Some(nid) = node_res.get("nodeId").and_then(Value::as_i64) {
+                                node_ids.push(nid);
+                            }
                         }
                     }
                 }
-            }
-            let backends: Vec<Option<i64>> = node_ids
-                .iter()
-                .map(|&nid| get_backend_node_id(&self.client, &self.session_id, nid).ok())
-                .collect();
-            return Ok(node_ids
-                .into_iter()
-                .zip(backends)
-                .map(|(id, b)| {
-                    Element::new_with_backend(
-                        Arc::clone(&self.client),
-                        self.session_id.clone(),
-                        id,
-                        b,
-                    )
-                })
-                .collect());
+                let backends: Vec<Option<i64>> = node_ids
+                    .iter()
+                    .map(|&nid| get_backend_node_id(&self.client, &self.session_id, nid).ok())
+                    .collect();
+                return Ok(node_ids
+                    .into_iter()
+                    .zip(backends)
+                    .map(|(id, b)| {
+                        Element::new_with_backend(
+                            Arc::clone(&self.client),
+                            self.session_id.clone(),
+                            id,
+                            b,
+                        )
+                    })
+                    .collect());
             }
             Ok(Vec::new())
         };
@@ -278,30 +284,22 @@ impl Frame {
         self.eles(locator)
     }
 
-    /// 在本 frame 内等待定位器匹配到元素，超时返回错误（与 Page::wait 一致，作用域为当前 frame）。
-    pub fn wait(&self, locator: &str, timeout: Duration) -> Result<Element, CdpError> {
+    /// 在本 frame 内等待定位器匹配到元素，超时返回 Ok(None)（与 Page::wait 一致，作用域为当前 frame）。
+    pub fn wait(&self, locator: &str, timeout: Duration) -> Result<Option<Element>, CdpError> {
         let deadline = std::time::Instant::now() + timeout;
         while std::time::Instant::now() < deadline {
             if let Some(el) = self.ele(locator)? {
-                return Ok(el);
+                return Ok(Some(el));
             }
             std::thread::sleep(Duration::from_millis(200));
         }
-        Err(CdpError::Protocol {
-            id: None,
-            code: -1,
-            message: format!("Timed out while waiting for an element inside the frame: {}", locator),
-        })
+        Ok(None)
     }
 
     /// 在本 frame 的 document 上下文中执行 JS（脚本内可用 document，与主页面 run_js 一致），返回 CDP 的 result。
     pub fn run_js(&self, script: &str) -> Result<Value, CdpError> {
         let do_run = |root: i64| -> Result<Value, CdpError> {
-            let doc_oid = resolve_node_to_object_id(
-                &self.client,
-                &self.session_id,
-                root,
-            )?;
+            let doc_oid = resolve_node_to_object_id(&self.client, &self.session_id, root)?;
             let fun = format!("function() {{ var document = this; {} }}", script);
             let params = json!({
                 "functionDeclaration": fun,
@@ -313,10 +311,7 @@ impl Frame {
                 Some(params),
                 Some(self.session_id.as_str()),
             )?;
-            Ok(result
-                .get("result")
-                .cloned()
-                .unwrap_or(Value::Null))
+            Ok(result.get("result").cloned().unwrap_or(Value::Null))
         };
         let root = *self.content_document_node_id.borrow();
         match do_run(root) {

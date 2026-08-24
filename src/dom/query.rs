@@ -16,10 +16,7 @@ fn is_transient_node_error(e: &CdpError) -> bool {
 }
 
 /// 启用 DOM 与 Runtime 并返回文档根 nodeId
-pub fn get_document_root(
-    client: &CdpClient,
-    session_id: &str,
-) -> Result<i64, CdpError> {
+pub fn get_document_root(client: &CdpClient, session_id: &str) -> Result<i64, CdpError> {
     client.send_with_session("DOM.enable", None, Some(session_id))?;
     client.send_with_session("Runtime.enable", None, Some(session_id))?;
     let result = client.send_with_session("DOM.getDocument", None, Some(session_id))?;
@@ -76,7 +73,8 @@ pub fn query_selector_all(
         "functionDeclaration": "function(){ return Array.from(this); }",
         "objectId": object_id
     });
-    let result = client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
     let result_val = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
@@ -91,7 +89,8 @@ pub fn query_selector_all(
         "functionDeclaration": "function(){ return this.length; }",
         "objectId": list_obj_id
     });
-    let result = client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
     let len = result
         .get("result")
         .and_then(|r| r.get("value"))
@@ -104,19 +103,27 @@ pub fn query_selector_all(
             "objectId": list_obj_id,
             "arguments": [{"value": i}]
         });
-        let result = match client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id)) {
+        let result = match client.send_with_session(
+            "Runtime.callFunctionOn",
+            Some(params),
+            Some(session_id),
+        ) {
             Ok(v) => v,
             Err(e) if is_transient_node_error(&e) => continue,
             Err(e) => return Err(e),
         };
-        let elem = result.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+        let elem = result
+            .get("result")
+            .and_then(|r| r.get("objectId"))
+            .and_then(Value::as_str);
         if let Some(oid) = elem {
             let params = json!({ "objectId": oid });
-            let res = match client.send_with_session("DOM.requestNode", Some(params), Some(session_id)) {
-                Ok(v) => v,
-                Err(e) if is_transient_node_error(&e) => continue,
-                Err(e) => return Err(e),
-            };
+            let res =
+                match client.send_with_session("DOM.requestNode", Some(params), Some(session_id)) {
+                    Ok(v) => v,
+                    Err(e) if is_transient_node_error(&e) => continue,
+                    Err(e) => return Err(e),
+                };
             if let Some(nid) = res.get("nodeId").and_then(Value::as_i64) {
                 node_ids.push(nid);
             }
@@ -136,7 +143,8 @@ pub fn get_iframe_content_document_node_id(
         "functionDeclaration": "function(){ return this.contentDocument; }",
         "objectId": object_id
     });
-    let result = client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
     let result_val = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
@@ -149,7 +157,10 @@ pub fn get_iframe_content_document_node_id(
     };
     let params = json!({ "objectId": obj_id });
     let res = client.send_with_session("DOM.requestNode", Some(params), Some(session_id))?;
-    let node_id = res.get("nodeId").and_then(Value::as_i64).filter(|&id| id != 0);
+    let node_id = res
+        .get("nodeId")
+        .and_then(Value::as_i64)
+        .filter(|&id| id != 0);
     Ok(node_id)
 }
 
@@ -166,7 +177,8 @@ pub fn query_selector_all_under_root(
         "objectId": object_id,
         "arguments": [{"value": selector}]
     });
-    let result = client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
     let result_val = result.get("result").ok_or_else(|| CdpError::Protocol {
         id: None,
         code: -1,
@@ -180,7 +192,8 @@ pub fn query_selector_all_under_root(
         "functionDeclaration": "function(){ return this.length; }",
         "objectId": list_obj_id
     });
-    let result = client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
     let len = result
         .get("result")
         .and_then(|r| r.get("value"))
@@ -193,19 +206,27 @@ pub fn query_selector_all_under_root(
             "objectId": list_obj_id,
             "arguments": [{"value": i}]
         });
-        let result = match client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id)) {
+        let result = match client.send_with_session(
+            "Runtime.callFunctionOn",
+            Some(params),
+            Some(session_id),
+        ) {
             Ok(v) => v,
             Err(e) if is_transient_node_error(&e) => continue,
             Err(e) => return Err(e),
         };
-        let elem = result.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+        let elem = result
+            .get("result")
+            .and_then(|r| r.get("objectId"))
+            .and_then(Value::as_str);
         if let Some(oid) = elem {
             let params = json!({ "objectId": oid });
-            let res = match client.send_with_session("DOM.requestNode", Some(params), Some(session_id)) {
-                Ok(v) => v,
-                Err(e) if is_transient_node_error(&e) => continue,
-                Err(e) => return Err(e),
-            };
+            let res =
+                match client.send_with_session("DOM.requestNode", Some(params), Some(session_id)) {
+                    Ok(v) => v,
+                    Err(e) if is_transient_node_error(&e) => continue,
+                    Err(e) => return Err(e),
+                };
             if let Some(nid) = res.get("nodeId").and_then(Value::as_i64) {
                 node_ids.push(nid);
             }
@@ -265,7 +286,8 @@ pub fn query_selector_all_including_same_origin_frames(
         "functionDeclaration": "function(){ return this.length; }",
         "objectId": list_obj_id
     });
-    let result = client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id))?;
     let len = result
         .get("result")
         .and_then(|r| r.get("value"))
@@ -278,19 +300,27 @@ pub fn query_selector_all_including_same_origin_frames(
             "objectId": list_obj_id,
             "arguments": [{"value": i}]
         });
-        let result = match client.send_with_session("Runtime.callFunctionOn", Some(params), Some(session_id)) {
+        let result = match client.send_with_session(
+            "Runtime.callFunctionOn",
+            Some(params),
+            Some(session_id),
+        ) {
             Ok(v) => v,
             Err(e) if is_transient_node_error(&e) => continue,
             Err(e) => return Err(e),
         };
-        let elem = result.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+        let elem = result
+            .get("result")
+            .and_then(|r| r.get("objectId"))
+            .and_then(Value::as_str);
         if let Some(oid) = elem {
             let params = json!({ "objectId": oid });
-            let res = match client.send_with_session("DOM.requestNode", Some(params), Some(session_id)) {
-                Ok(v) => v,
-                Err(e) if is_transient_node_error(&e) => continue,
-                Err(e) => return Err(e),
-            };
+            let res =
+                match client.send_with_session("DOM.requestNode", Some(params), Some(session_id)) {
+                    Ok(v) => v,
+                    Err(e) if is_transient_node_error(&e) => continue,
+                    Err(e) => return Err(e),
+                };
             if let Some(nid) = res.get("nodeId").and_then(Value::as_i64) {
                 pairs.push((nid, oid.to_string()));
             }
@@ -364,7 +394,8 @@ pub fn get_search_results(
         "fromIndex": from_index,
         "toIndex": to_index
     });
-    let result = client.send_with_session("DOM.getSearchResults", Some(params), Some(session_id))?;
+    let result =
+        client.send_with_session("DOM.getSearchResults", Some(params), Some(session_id))?;
     let node_ids = result
         .get("nodeIds")
         .and_then(Value::as_array)

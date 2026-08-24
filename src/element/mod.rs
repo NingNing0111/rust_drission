@@ -2,8 +2,8 @@
 
 use crate::cdp::CdpError;
 use crate::dom::{
-    get_backend_node_id, get_node_id_from_backend, get_outer_html, get_iframe_content_document_node_id,
-    query_selector, resolve_backend_to_object_id, resolve_node_to_object_id,
+    get_backend_node_id, get_iframe_content_document_node_id, get_node_id_from_backend,
+    get_outer_html, query_selector, resolve_backend_to_object_id, resolve_node_to_object_id,
 };
 use crate::frame::Frame;
 use serde_json::{json, Value};
@@ -53,7 +53,9 @@ fn describe_node_by_object_id(
     let res = client.send_with_session("DOM.describeNode", Some(params), Some(session_id))?;
     let node = res.get("node");
     let node_id = node.and_then(|n| n.get("nodeId")).and_then(Value::as_i64);
-    let backend_node_id = node.and_then(|n| n.get("backendNodeId")).and_then(Value::as_i64);
+    let backend_node_id = node
+        .and_then(|n| n.get("backendNodeId"))
+        .and_then(Value::as_i64);
     Ok((node_id, backend_node_id))
 }
 
@@ -125,11 +127,8 @@ impl Element {
             Err(e) => {
                 if is_no_node_error(&e) {
                     if let Some(backend_id) = self.backend_node_id {
-                        let fresh = get_node_id_from_backend(
-                            &self.client,
-                            &self.session_id,
-                            backend_id,
-                        )?;
+                        let fresh =
+                            get_node_id_from_backend(&self.client, &self.session_id, backend_id)?;
                         self.node_id.replace(fresh);
                         return retry(fresh);
                     }
@@ -177,11 +176,20 @@ impl Element {
     /// 同 call_on，但设置 returnByValue=true，将 JS 对象序列化为 JSON 值返回。
     /// 用于需要读取属性/数值的场景（如 getBoundingClientRect、is_displayed 等）。
     /// 需要 objectId 的场景（如 parent、children）应使用 call_on。
-    pub(crate) fn call_on_value(&self, fn_decl: &str, args: Option<Value>) -> Result<Value, CdpError> {
+    pub(crate) fn call_on_value(
+        &self,
+        fn_decl: &str,
+        args: Option<Value>,
+    ) -> Result<Value, CdpError> {
         self.call_on_inner(fn_decl, args, true)
     }
 
-    fn call_on_inner(&self, fn_decl: &str, args: Option<Value>, return_by_value: bool) -> Result<Value, CdpError> {
+    fn call_on_inner(
+        &self,
+        fn_decl: &str,
+        args: Option<Value>,
+        return_by_value: bool,
+    ) -> Result<Value, CdpError> {
         let object_id = self.object_id()?;
         let mut params = json!({
             "functionDeclaration": fn_decl,
@@ -227,7 +235,10 @@ impl Element {
 
     /// 标签名，小写（与 DrissionPage `tag` 属性一致）
     pub fn tag(&self) -> Result<String, CdpError> {
-        let result = self.call_on("function(){ return (this.localName || this.tagName || '').toLowerCase(); }", None)?;
+        let result = self.call_on(
+            "function(){ return (this.localName || this.tagName || '').toLowerCase(); }",
+            None,
+        )?;
         Ok(result
             .get("value")
             .and_then(Value::as_str)
@@ -283,11 +294,14 @@ impl Element {
             "function(){ var m=this.attributes; var o={}; for(var i=0;i<m.length;i++){ o[m[i].name]=m[i].value; } return o; }",
             None,
         )?;
-        let obj = result.get("value").and_then(Value::as_object).ok_or_else(|| CdpError::Protocol {
-            id: None,
-            code: -1,
-            message: "The attrs result was not an object".into(),
-        })?;
+        let obj = result
+            .get("value")
+            .and_then(Value::as_object)
+            .ok_or_else(|| CdpError::Protocol {
+                id: None,
+                code: -1,
+                message: "The attrs result was not an object".into(),
+            })?;
         let mut map = std::collections::HashMap::new();
         for (k, v) in obj {
             if let Some(s) = v.as_str() {
@@ -347,7 +361,10 @@ impl Element {
     pub fn attr(&self, name: &str) -> Result<String, CdpError> {
         let name_json = serde_json::to_string(name).map_err(CdpError::Json)?;
         let result = self.call_on(
-            &format!("function(){{ var v = this.getAttribute({}); return v !== null ? v : ''; }}", name_json),
+            &format!(
+                "function(){{ var v = this.getAttribute({}); return v !== null ? v : ''; }}",
+                name_json
+            ),
             None,
         )?;
         Ok(result
@@ -388,19 +405,29 @@ impl Element {
             "function(){ var r = this.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }",
             None,
         )?;
-        let x = result.get("value").and_then(|v| v.get("x")).and_then(Value::as_f64).unwrap_or(0.0);
-        let y = result.get("value").and_then(|v| v.get("y")).and_then(Value::as_f64).unwrap_or(0.0);
-        self.client.send_with_session(
-            "Input.enable",
-            None,
-            Some(self.session_id.as_str()),
-        ).ok();
+        let x = result
+            .get("value")
+            .and_then(|v| v.get("x"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let y = result
+            .get("value")
+            .and_then(|v| v.get("y"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        self.client
+            .send_with_session("Input.enable", None, Some(self.session_id.as_str()))
+            .ok();
         let params = json!({
             "type": "mouseMoved",
             "x": x,
             "y": y
         });
-        self.client.send_with_session("Input.dispatchMouseEvent", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Input.dispatchMouseEvent",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
@@ -410,7 +437,10 @@ impl Element {
             "function(){ var r = this.getBoundingClientRect(); return r.width > 0 && r.height > 0 && window.getComputedStyle(this).visibility !== 'hidden' && window.getComputedStyle(this).display !== 'none'; }",
             None,
         )?;
-        Ok(result.get("value").and_then(Value::as_bool).unwrap_or(false))
+        Ok(result
+            .get("value")
+            .and_then(Value::as_bool)
+            .unwrap_or(false))
     }
 
     /// 是否可操作（非 disabled）
@@ -443,22 +473,21 @@ impl Element {
             Some(params),
             Some(self.session_id.as_str()),
         )?;
-        let data_b64 = result
-            .get("data")
-            .and_then(Value::as_str)
-            .ok_or_else(|| CdpError::Protocol {
+        let data_b64 =
+            result
+                .get("data")
+                .and_then(Value::as_str)
+                .ok_or_else(|| CdpError::Protocol {
+                    id: None,
+                    code: -1,
+                    message: "Page.captureScreenshot did not return image data".into(),
+                })?;
+        let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, data_b64)
+            .map_err(|e| CdpError::Protocol {
                 id: None,
                 code: -1,
-                message: "Page.captureScreenshot did not return image data".into(),
+                message: format!("Failed to decode base64 data: {}", e),
             })?;
-        let data = base64::Engine::decode(
-            &base64::engine::general_purpose::STANDARD,
-            data_b64,
-        ).map_err(|e| CdpError::Protocol {
-            id: None,
-            code: -1,
-            message: format!("Failed to decode base64 data: {}", e),
-        })?;
         std::fs::write(path, data).map_err(|e| CdpError::Protocol {
             id: None,
             code: -1,
@@ -469,14 +498,18 @@ impl Element {
 
     /// 在当前元素下按 CSS 选择器取**第一个匹配子元素的文本**（不创建子元素引用，避免 DOM 更新后 nodeId 失效导致 "Could not find node with given id"）
     pub fn element_text(&self, locator: &str) -> Result<Option<String>, CdpError> {
-        self._element_text_inner(locator).map_err(|e| e.with_context(locator))
+        self._element_text_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     fn _element_text_inner(&self, locator: &str) -> Result<Option<String>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(None);
@@ -494,14 +527,18 @@ impl Element {
 
     /// 在当前元素下是否存在匹配选择器的子元素（不创建子元素引用）
     pub fn element_exists(&self, locator: &str) -> Result<bool, CdpError> {
-        self._element_exists_inner(locator).map_err(|e| e.with_context(locator))
+        self._element_exists_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     fn _element_exists_inner(&self, locator: &str) -> Result<bool, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(false);
@@ -510,19 +547,26 @@ impl Element {
             "function(sel){ try { return this.querySelector(sel) !== null; } catch(e) { return false; } }",
             Some(json!([{ "value": selector }])),
         )?;
-        Ok(result.get("value").and_then(Value::as_bool).unwrap_or(false))
+        Ok(result
+            .get("value")
+            .and_then(Value::as_bool)
+            .unwrap_or(false))
     }
 
     /// 在当前元素下取第一个匹配子元素的属性值（不创建子元素引用）
     pub fn element_attr(&self, locator: &str, attr: &str) -> Result<Option<String>, CdpError> {
-        self._element_attr_inner(locator, attr).map_err(|e| e.with_context(locator))
+        self._element_attr_inner(locator, attr)
+            .map_err(|e| e.with_context(locator))
     }
 
     fn _element_attr_inner(&self, locator: &str, attr: &str) -> Result<Option<String>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(None);
@@ -540,14 +584,18 @@ impl Element {
 
     /// 在当前元素下按选择器取所有匹配子元素的文本列表（不创建子元素引用，一次 callFunctionOn 返回 JSON 数组字符串）
     pub fn element_texts(&self, locator: &str) -> Result<Vec<String>, CdpError> {
-        self._element_texts_inner(locator).map_err(|e| e.with_context(locator))
+        self._element_texts_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     fn _element_texts_inner(&self, locator: &str) -> Result<Vec<String>, CdpError> {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         let Some(selector) = loc.to_css_selector() else {
             return Ok(Vec::new());
@@ -556,17 +604,15 @@ impl Element {
             "function(sel){ try { var nodes = this.querySelectorAll(sel); var arr = []; for(var i=0;i<nodes.length;i++) { var t = (nodes[i].textContent||'').trim(); if(t) arr.push(t); } return JSON.stringify(arr); } catch(e) { return '[]'; } }",
             Some(json!([{ "value": selector }])),
         )?;
-        let s = result
-            .get("value")
-            .and_then(Value::as_str)
-            .unwrap_or("[]");
+        let s = result.get("value").and_then(Value::as_str).unwrap_or("[]");
         let arr: Vec<String> = serde_json::from_str(s).unwrap_or_else(|_| Vec::new());
         Ok(arr)
     }
 
     /// 在当前元素下按定位器查单个子元素
     pub fn element(&self, locator: &str) -> Result<Option<Element>, CdpError> {
-        self._element_inner(locator).map_err(|e| e.with_context(locator))
+        self._element_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     /// element 内部实现
@@ -574,7 +620,10 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         if let Some(selector) = loc.to_css_selector() {
             // 优先在当前元素 objectId 上执行 querySelector，避免动态 DOM 下 nodeId 易失效问题。
@@ -590,7 +639,8 @@ impl Element {
                     Some(self.session_id.as_str()),
                 )?;
                 if let Some(nid) = node_res.get("nodeId").and_then(Value::as_i64) {
-                    let backend_node_id = get_backend_node_id(&self.client, &self.session_id, nid).ok();
+                    let backend_node_id =
+                        get_backend_node_id(&self.client, &self.session_id, nid).ok();
                     return Ok(Some(Element::new_with_object_id(
                         Arc::clone(&self.client),
                         self.session_id.clone(),
@@ -632,9 +682,17 @@ impl Element {
             let obj_id = result.get("objectId").and_then(Value::as_str);
             if let Some(oid) = obj_id {
                 let params = json!({ "objectId": oid });
-                let res = self.client.send_with_session("DOM.requestNode", Some(params), Some(self.session_id.as_str()))?;
+                let res = self.client.send_with_session(
+                    "DOM.requestNode",
+                    Some(params),
+                    Some(self.session_id.as_str()),
+                )?;
                 if let Some(nid) = res.get("nodeId").and_then(Value::as_i64) {
-                    return Ok(Some(Element::new(Arc::clone(&self.client), self.session_id.clone(), nid)));
+                    return Ok(Some(Element::new(
+                        Arc::clone(&self.client),
+                        self.session_id.clone(),
+                        nid,
+                    )));
                 }
             }
             Ok(None)
@@ -645,7 +703,8 @@ impl Element {
 
     /// 在当前元素下按定位器查多个子元素
     pub fn elements(&self, locator: &str) -> Result<Vec<Element>, CdpError> {
-        self._elements_inner(locator).map_err(|e| e.with_context(locator))
+        self._elements_inner(locator)
+            .map_err(|e| e.with_context(locator))
     }
 
     /// elements 内部实现
@@ -653,27 +712,52 @@ impl Element {
         let loc = crate::locator::Locator::parse(locator).map_err(|_| CdpError::Protocol {
             id: None,
             code: -1,
-            message: format!("Invalid locator: {}. Please check the locator syntax.", locator),
+            message: format!(
+                "Invalid locator: {}. Please check the locator syntax.",
+                locator
+            ),
         })?;
         if let Some(selector) = loc.to_css_selector() {
             let sel = serde_json::to_string(&selector).map_err(CdpError::Json)?;
             let result = self.call_on(
-                &format!("function(){{ return Array.from(this.querySelectorAll({})); }}", sel),
+                &format!(
+                    "function(){{ return Array.from(this.querySelectorAll({})); }}",
+                    sel
+                ),
                 None,
             )?;
             let obj_id = result.get("objectId").and_then(Value::as_str);
             let mut out = Vec::new();
             if let Some(oid) = obj_id {
                 let params = json!({ "functionDeclaration": "function(){ return this.length; }", "objectId": oid });
-                let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                let len = res.get("result").and_then(|r| r.get("value")).and_then(Value::as_u64).unwrap_or(0) as usize;
+                let res = self.client.send_with_session(
+                    "Runtime.callFunctionOn",
+                    Some(params),
+                    Some(self.session_id.as_str()),
+                )?;
+                let len = res
+                    .get("result")
+                    .and_then(|r| r.get("value"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as usize;
                 for i in 0..len {
                     let params = json!({ "functionDeclaration": "function(i){ return this[i]; }", "objectId": oid, "arguments": [{"value": i}] });
-                    let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                    let eid = res.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+                    let res = self.client.send_with_session(
+                        "Runtime.callFunctionOn",
+                        Some(params),
+                        Some(self.session_id.as_str()),
+                    )?;
+                    let eid = res
+                        .get("result")
+                        .and_then(|r| r.get("objectId"))
+                        .and_then(Value::as_str);
                     if let Some(eid) = eid {
                         let params = json!({ "objectId": eid });
-                        let node_res = self.client.send_with_session("DOM.requestNode", Some(params), Some(self.session_id.as_str()))?;
+                        let node_res = self.client.send_with_session(
+                            "DOM.requestNode",
+                            Some(params),
+                            Some(self.session_id.as_str()),
+                        )?;
                         if let Some(nid) = node_res.get("nodeId").and_then(Value::as_i64) {
                             let backend_node_id =
                                 get_backend_node_id(&self.client, &self.session_id, nid).ok();
@@ -701,17 +785,40 @@ impl Element {
             let mut elements = Vec::new();
             if let Some(oid) = obj_id {
                 let params = json!({ "functionDeclaration": "function(){ return this.length; }", "objectId": oid });
-                let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                let len = res.get("result").and_then(|r| r.get("value")).and_then(Value::as_u64).unwrap_or(0) as usize;
+                let res = self.client.send_with_session(
+                    "Runtime.callFunctionOn",
+                    Some(params),
+                    Some(self.session_id.as_str()),
+                )?;
+                let len = res
+                    .get("result")
+                    .and_then(|r| r.get("value"))
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0) as usize;
                 for i in 0..len {
                     let params = json!({ "functionDeclaration": "function(i){ return this[i]; }", "objectId": oid, "arguments": [{"value": i}] });
-                    let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                    let eid = res.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+                    let res = self.client.send_with_session(
+                        "Runtime.callFunctionOn",
+                        Some(params),
+                        Some(self.session_id.as_str()),
+                    )?;
+                    let eid = res
+                        .get("result")
+                        .and_then(|r| r.get("objectId"))
+                        .and_then(Value::as_str);
                     if let Some(eid) = eid {
                         let params = json!({ "objectId": eid });
-                        let node_res = self.client.send_with_session("DOM.requestNode", Some(params), Some(self.session_id.as_str()))?;
+                        let node_res = self.client.send_with_session(
+                            "DOM.requestNode",
+                            Some(params),
+                            Some(self.session_id.as_str()),
+                        )?;
                         if let Some(nid) = node_res.get("nodeId").and_then(Value::as_i64) {
-                            elements.push(Element::new(Arc::clone(&self.client), self.session_id.clone(), nid));
+                            elements.push(Element::new(
+                                Arc::clone(&self.client),
+                                self.session_id.clone(),
+                                nid,
+                            ));
                         }
                     }
                 }
@@ -731,7 +838,7 @@ impl Element {
         let result = self.call_on(&script, None)?;
         let obj_id = result.get("objectId").and_then(Value::as_str);
         if let Some(oid) = obj_id {
-            let res = describe_node_by_object_id(&self.client, &self.session_id, &oid)?;
+            let res = describe_node_by_object_id(&self.client, &self.session_id, oid)?;
             if let (Some(nid), bid) = res {
                 return Ok(Some(Element::new_with_backend(
                     Arc::clone(&self.client),
@@ -754,7 +861,7 @@ impl Element {
         let result = self.call_on("function(){ return this.previousElementSibling; }", None)?;
         let obj_id = result.get("objectId").and_then(Value::as_str);
         if let Some(oid) = obj_id {
-            let res = describe_node_by_object_id(&self.client, &self.session_id, &oid)?;
+            let res = describe_node_by_object_id(&self.client, &self.session_id, oid)?;
             if let (Some(nid), bid) = res {
                 return Ok(Some(Element::new_with_backend(
                     Arc::clone(&self.client),
@@ -772,7 +879,7 @@ impl Element {
         let result = self.call_on("function(){ return this.nextElementSibling; }", None)?;
         let obj_id = result.get("objectId").and_then(Value::as_str);
         if let Some(oid) = obj_id {
-            let res = describe_node_by_object_id(&self.client, &self.session_id, &oid)?;
+            let res = describe_node_by_object_id(&self.client, &self.session_id, oid)?;
             if let (Some(nid), bid) = res {
                 return Ok(Some(Element::new_with_backend(
                     Arc::clone(&self.client),
@@ -787,22 +894,34 @@ impl Element {
 
     /// 获取所有子元素（直接子节点，不含文本节点）
     pub fn children(&self) -> Result<Vec<Element>, CdpError> {
-        let result = self.call_on(
-            "function(){ return Array.from(this.children); }",
-            None,
-        )?;
+        let result = self.call_on("function(){ return Array.from(this.children); }", None)?;
         let obj_id = result.get("objectId").and_then(Value::as_str);
         let mut elements = Vec::new();
         if let Some(oid) = obj_id {
             let params = json!({ "functionDeclaration": "function(){ return this.length; }", "objectId": oid });
-            let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-            let len = res.get("result").and_then(|r| r.get("value")).and_then(Value::as_u64).unwrap_or(0) as usize;
+            let res = self.client.send_with_session(
+                "Runtime.callFunctionOn",
+                Some(params),
+                Some(self.session_id.as_str()),
+            )?;
+            let len = res
+                .get("result")
+                .and_then(|r| r.get("value"))
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
             for i in 0..len {
                 let params = json!({ "functionDeclaration": "function(i){ return this[i]; }", "objectId": oid, "arguments": [{"value": i}] });
-                let res = self.client.send_with_session("Runtime.callFunctionOn", Some(params), Some(self.session_id.as_str()))?;
-                let eid = res.get("result").and_then(|r| r.get("objectId")).and_then(Value::as_str);
+                let res = self.client.send_with_session(
+                    "Runtime.callFunctionOn",
+                    Some(params),
+                    Some(self.session_id.as_str()),
+                )?;
+                let eid = res
+                    .get("result")
+                    .and_then(|r| r.get("objectId"))
+                    .and_then(Value::as_str);
                 if let Some(eid) = eid {
-                    let desc = describe_node_by_object_id(&self.client, &self.session_id, &eid)?;
+                    let desc = describe_node_by_object_id(&self.client, &self.session_id, eid)?;
                     if let (Some(nid), bid) = desc {
                         elements.push(Element::new_with_backend(
                             Arc::clone(&self.client),
@@ -874,7 +993,11 @@ impl Element {
     /// 获取表单元素的值
     pub fn value(&self) -> Result<String, CdpError> {
         let result = self.call_on("function(){ return this.value || ''; }", None)?;
-        Ok(result.get("value").and_then(Value::as_str).unwrap_or("").to_string())
+        Ok(result
+            .get("value")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string())
     }
 
     /// 拖拽到目标位置（相对偏移）
@@ -885,8 +1008,16 @@ impl Element {
             "function(){ var r = this.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }",
             None,
         )?;
-        let start_x = result.get("value").and_then(|v| v.get("x")).and_then(Value::as_f64).unwrap_or(0.0);
-        let start_y = result.get("value").and_then(|v| v.get("y")).and_then(Value::as_f64).unwrap_or(0.0);
+        let start_x = result
+            .get("value")
+            .and_then(|v| v.get("x"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let start_y = result
+            .get("value")
+            .and_then(|v| v.get("y"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
         let end_x = start_x + offset_x as f64;
         let end_y = start_y + offset_y as f64;
         self.drag_by_coords(start_x, start_y, end_x, end_y, duration)
@@ -900,19 +1031,44 @@ impl Element {
             "function(){ var r = this.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }",
             None,
         )?;
-        let start_x = start_result.get("value").and_then(|v| v.get("x")).and_then(Value::as_f64).unwrap_or(0.0);
-        let start_y = start_result.get("value").and_then(|v| v.get("y")).and_then(Value::as_f64).unwrap_or(0.0);
+        let start_x = start_result
+            .get("value")
+            .and_then(|v| v.get("x"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let start_y = start_result
+            .get("value")
+            .and_then(|v| v.get("y"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
         let end_result = target.call_on_value(
             "function(){ var r = this.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }",
             None,
         )?;
-        let end_x = end_result.get("value").and_then(|v| v.get("x")).and_then(Value::as_f64).unwrap_or(0.0);
-        let end_y = end_result.get("value").and_then(|v| v.get("y")).and_then(Value::as_f64).unwrap_or(0.0);
+        let end_x = end_result
+            .get("value")
+            .and_then(|v| v.get("x"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let end_y = end_result
+            .get("value")
+            .and_then(|v| v.get("y"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
         self.drag_by_coords(start_x, start_y, end_x, end_y, duration)
     }
 
-    fn drag_by_coords(&self, start_x: f64, start_y: f64, end_x: f64, end_y: f64, duration: u64) -> Result<(), CdpError> {
-        let _ = self.client.send_with_session("Input.enable", None, Some(self.session_id.as_str()));
+    fn drag_by_coords(
+        &self,
+        start_x: f64,
+        start_y: f64,
+        end_x: f64,
+        end_y: f64,
+        duration: u64,
+    ) -> Result<(), CdpError> {
+        let _ = self
+            .client
+            .send_with_session("Input.enable", None, Some(self.session_id.as_str()));
         // mousePressed
         let params_press = json!({
             "type": "mousePressed",
@@ -921,7 +1077,11 @@ impl Element {
             "button": "left",
             "clickCount": 1
         });
-        self.client.send_with_session("Input.dispatchMouseEvent", Some(params_press), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Input.dispatchMouseEvent",
+            Some(params_press),
+            Some(self.session_id.as_str()),
+        )?;
         // 模拟拖拽路径（简化为直接移动）
         let steps = (duration as f64 / 16.0).ceil() as u32; // ~60fps
         for i in 1..=steps {
@@ -935,7 +1095,11 @@ impl Element {
                 "button": "left",
                 "clickCount": 0
             });
-            self.client.send_with_session("Input.dispatchMouseEvent", Some(params_move), Some(self.session_id.as_str()))?;
+            self.client.send_with_session(
+                "Input.dispatchMouseEvent",
+                Some(params_move),
+                Some(self.session_id.as_str()),
+            )?;
             std::thread::sleep(std::time::Duration::from_millis(16));
         }
         // mouseReleased
@@ -946,7 +1110,11 @@ impl Element {
             "button": "left",
             "clickCount": 1
         });
-        self.client.send_with_session("Input.dispatchMouseEvent", Some(params_release), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Input.dispatchMouseEvent",
+            Some(params_release),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
@@ -956,27 +1124,40 @@ impl Element {
             "function(){ var r = this.getBoundingClientRect(); return { x: r.left + r.width/2, y: r.top + r.height/2 }; }",
             None,
         )?;
-        let base_x = result.get("value").and_then(|v| v.get("x")).and_then(Value::as_f64).unwrap_or(0.0);
-        let base_y = result.get("value").and_then(|v| v.get("y")).and_then(Value::as_f64).unwrap_or(0.0);
+        let base_x = result
+            .get("value")
+            .and_then(|v| v.get("x"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let base_y = result
+            .get("value")
+            .and_then(|v| v.get("y"))
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
         let x = base_x + offset_x.unwrap_or(0.0);
         let y = base_y + offset_y.unwrap_or(0.0);
-        self.client.send_with_session(
-            "Input.enable",
-            None,
-            Some(self.session_id.as_str()),
-        ).ok();
+        self.client
+            .send_with_session("Input.enable", None, Some(self.session_id.as_str()))
+            .ok();
         let params = json!({
             "type": "mouseMoved",
             "x": x,
             "y": y
         });
-        self.client.send_with_session("Input.dispatchMouseEvent", Some(params), Some(self.session_id.as_str()))?;
+        self.client.send_with_session(
+            "Input.dispatchMouseEvent",
+            Some(params),
+            Some(self.session_id.as_str()),
+        )?;
         Ok(())
     }
 
     /// 将元素滚动到可见区域（与 DrissionPage `over` 一致）
     pub fn scroll_into_view(&self) -> Result<(), CdpError> {
-        self.call_on("function(){ this.scrollIntoView({ block: 'center', inline: 'center' }); }", None)?;
+        self.call_on(
+            "function(){ this.scrollIntoView({ block: 'center', inline: 'center' }); }",
+            None,
+        )?;
         Ok(())
     }
 
@@ -990,14 +1171,24 @@ impl Element {
     /// 删除属性
     pub fn remove_attr(&self, name: &str) -> Result<(), CdpError> {
         let name_json = serde_json::to_string(name).map_err(CdpError::Json)?;
-        self.call_on(&format!("function(){{ this.removeAttribute({}); }}", name_json), None)?;
+        self.call_on(
+            &format!("function(){{ this.removeAttribute({}); }}", name_json),
+            None,
+        )?;
         Ok(())
     }
 
     /// 获取内联样式
     pub fn style(&self) -> Result<String, CdpError> {
-        let result = self.call_on("function(){ return this.getAttribute('style') || ''; }", None)?;
-        Ok(result.get("value").and_then(Value::as_str).unwrap_or("").to_string())
+        let result = self.call_on(
+            "function(){ return this.getAttribute('style') || ''; }",
+            None,
+        )?;
+        Ok(result
+            .get("value")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string())
     }
 
     /// 移除元素（从 DOM 中删除）
